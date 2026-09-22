@@ -1,0 +1,32 @@
+[
+  {
+    "file": "src/fetcher.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++20",
+      "-Iinclude",
+      "src/fetcher.cpp"
+    ],
+    "directory": "/home/blyah/Study/simul_cpu_os/hw/hw1_interpreter"
+  },
+  {
+    "file": "src/main.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++20",
+      "-Iinclude",
+      "src/main.cpp"
+    ],
+    "directory": "/home/blyah/Study/simul_cpu_os/hw/hw1_interpreter"
+  },
+  {
+    "file": "include/fetcher.hpp",
+    "arguments": [
+      "g++",
+      "-std=c++20",
+      "-Iinclude",
+      "include/fetcher.hpp"
+    ],
+    "directory": "/home/blyah/Study/simul_cpu_os/hw/hw1_interpreter"
+  }
+]
