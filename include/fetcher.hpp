@@ -1,16 +1,19 @@
 #pragma once
 
-#include <cstdio>
-#include <cstdint>
 #include <fstream>
 #include <string>
 
-struct Fetcher {
+#include "isa.hpp"
+
+class Fetcher {
+public:
   std::ifstream input;
 
-  Fetcher(std::string filename, std::ios::openmode flags)
-    : input {filename, flags} {
+  Fetcher(std::string fname)
+    : input{fname, std::ios::in}
+  {
   }
 
-  ~Fetcher();
+  Word load_instr();
+  bool is_eof();
 };
