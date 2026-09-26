@@ -14,7 +14,7 @@ public:
   Memory*  memory;
 
   CoreState()
-    : gpr_regs{}, pc{0}, memory{} 
+    : gpr_regs{}, pc{0}, memory{}
   {
   };
 
@@ -31,8 +31,8 @@ public:
     delete cpu;
   }
 
-  Instruction decoder  (Word inst_code);
-  void        executor (Instruction instr);
+  Instruction decoder (Word inst_code);
+  void        executor(Instruction instr);
 
 private:
   CoreState* cpu;

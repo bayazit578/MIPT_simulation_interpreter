@@ -35,31 +35,51 @@
 }
 
 
-#define XCUTE_CLZ {                                                     \
-  std::uint32_t value = cpu->gpr_regs[instr.field2];                    \
-  std::uint32_t mask  = 1 << (kWordSize - 1);                           \
-  for (std::uint8_t i = 0; i < kWordSize || (value & mask) == 0; i++) { \
-    value <<= 1;                                                        \
-  }                                                                     \
-  cpu->gpr_regs[instr.field1] = i;                                      \
+#define XCUTE_CLZ {                                   \
+  std::uint32_t value = cpu->gpr_regs[instr.field2];  \
+  std::uint32_t mask  = 1 << (kWordSize - 1);         \
+  std::uint32_t i     = 0;                            \
+  for (; i < kWordSize || (value & mask) == 0; i++) { \
+    value <<= 1;                                      \
+  }                                                   \
+  cpu->gpr_regs[instr.field1] = i;                    \
 }
 
-#define XCUTE_LI {                                           \
-  std::uint32_t bit_width = FIELD3_WIDTH                     \
-  SignedWord extd_imm = sgd_extend(instr.field3, bit_width); \
-  cpu->gpr_regs[instr.field1] = (Word)extd_imm;              \
+#define XCUTE_LI {                                                   \
+  std::uint32_t bit_width     = FIELD3_WIDTH(instr.instr);           \
+  SignedWord    extd_imm      = sgn_extend(instr.field3, bit_width); \
+  cpu->gpr_regs[instr.field1] = (Word)extd_imm;                      \
 }
 
 #define XCUTE_SYSC {\
 }
 
-#define XCUTE_ST {\
+#define XCUTE_ST {                                                 \
+  std::uint32_t bit_width = FIELD3_WIDTH(instr.instr)              \
+  SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width); \
+                                                                   \
+  std::size_t addr = cpu->gpr_regs[instr.field1] + extd_imm;       \
+  cpu->memory->store<Word>(addr, cpu->gpr_regs[instr.field2]);     \
 }
 
-#define XCUTE_STP {\
+#define XCUTE_STP {                                                \
+  std::uint32_t bit_width = FIELD3_WIDTH(instr.instr)              \
+  SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width); \
+                                                                   \
+  std::size_t addr = cpu->gpr_regs[instr.field1] + extd_imm;       \
+  cpu->memory->store<Word>(addr    , cpu->gpr_regs[instr.field2]); \
+  cpu->memory->store<Word>(addr + 4, cpu->gpr_regs[instr.field3]); \
 }
 
-#define XCUTE_BNE {\
+#define XCUTE_BNE {                                         \
+  std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);    \
+  SignedWord    extd_offset = sgn_extend  (instr.field3, ); \
+  Word target = extd_offset << 2;                           \
+                                                            \
+  std::bool cond = instr.field1 != instr.field2             \
+                                                            \
+  Word pc_prev = cpu->pc;                                   \
+  cpu->pc = cond ? pc + target : pc + 4;                    \
 }
 
 #define XCUTE_BEQ {\
