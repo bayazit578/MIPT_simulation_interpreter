@@ -70,7 +70,7 @@ public:
     std::uint8_t width;
   };
 
-  InstrNumb instr {}; 
+  InstrNumb instr {};
   Opcode    opcode{};
   Operands  field1{};
   Operands  field2{};

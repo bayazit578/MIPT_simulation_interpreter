@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
+#include <vector>
 
 #include "isa.hpp"
 
@@ -20,6 +21,13 @@ public:
 
   template<MemoryType M>
   void store(std::size_t addr, M value);
+
+  void load_instrs(std::size_t addr, std::vector<Word> instrs) {
+    if (addr + instrs.size() > kMemorySize - 1)
+      throw std::runtime_error("memory: access out of bounds");
+
+    std::memcpy(data.data() + addr, instrs.data(), sizeof(std::byte) * instrs.size());
+  }
 
 private:
   std::array<std::uint8_t, kMemorySize> data;

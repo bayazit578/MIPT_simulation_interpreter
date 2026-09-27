@@ -1,11 +1,11 @@
 #include <iostream>
 
-#include "memory.hpp"
+#include "interpreter.hpp"
 
 int main() {
-  Memory memory;
-  uint8_t value = memory.load<uint8_t>(1025);
-  std::cout << value << "\n";
+  Interpreter intrprtr;
+  intrprtr.load_program("huihuihui");
+  intrprtr.inter();
 
-  return 0;
+  return EXIT_SUCCESS;
 }

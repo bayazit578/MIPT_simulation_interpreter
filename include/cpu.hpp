@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <algorithm>
+#include <vector>
 
 #include "memory.hpp"
 #include "isa.hpp"
@@ -11,19 +13,20 @@ struct CoreState {
 public:
   Register gpr_regs[kNumRegs];
   Register pc;
-  Memory*  memory;
 
   CoreState()
-    : gpr_regs{}, pc{0}, memory{}
+    : gpr_regs{}, pc{0}
   {
   };
 
-  ~CoreState();
+  ~CoreState() = default;
 };
 
-struct Cpu {
+class Cpu {
 public:
-  Cpu() {
+  Cpu()
+    : memory_{}
+  {
     cpu = new CoreState{};
   }
 
@@ -31,9 +34,33 @@ public:
     delete cpu;
   }
 
-  Instruction decoder (Word inst_code);
-  void        executor(Instruction instr);
+  void        load_instrs(std::vector<Word> &instrs);
+  Word        fetch_instr();
+  Instruction decoder    (Word inst_code);
+  void        executor   (Instruction instr);
+
+  Register get_reg(std::size_t spec);
+  Register get_pc ();
+  void     set_reg(std::size_t spec, Register val);
+  void     set_pc (Register val);
 
 private:
-  CoreState* cpu;
+  CoreState *cpu;
+  Memory     memory_;
+
+  void execute_clz (Instruction instr);
+  void execute_li  (Instruction instr);
+  void execute_sysc(Instruction instr);
+  void execute_st  (Instruction instr);
+  void execute_stp (Instruction instr);
+  void execute_bne (Instruction instr);
+  void execute_beq (Instruction instr);
+  void execute_selc(Instruction instr);
+  void execute_sti (Instruction instr);
+  void execute_j   (Instruction instr);
+  void execute_ssat(Instruction instr);
+  void execute_ld  (Instruction instr);
+  void execute_sbit(Instruction instr);
+  void execute_add (Instruction isntr);
+  void execute_addi(Instruction instr);
 };
