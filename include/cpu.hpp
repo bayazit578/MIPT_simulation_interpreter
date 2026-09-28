@@ -3,24 +3,40 @@
 #include <cstdint>
 #include <algorithm>
 #include <vector>
+#include <iostream>
 
 #include "memory.hpp"
 #include "isa.hpp"
 
 using Register = std::uint32_t;
 
+#ifdef DEBUG
+#define IF_DEBUG(...) __VA_ARGS__
+#else
+#define IF_DEBUG(...)
+#endif
+
 struct CoreState {
 public:
-  Register gpr_regs[kNumRegs];
-  Register pc;
-
   CoreState()
     : gpr_regs{}, pc{0}
   {
   };
 
   ~CoreState() = default;
+
+  Register get_reg(std::size_t spec);
+  Register get_pc ();
+  void     set_reg(std::size_t spec, Register val);
+  void     set_pc (Register val);
+
+private:
+  Register gpr_regs[kNumRegs];
+  Register pc;
+
+  void check_range(std::size_t spec);
 };
+
 
 class Cpu {
 public:
@@ -39,13 +55,10 @@ public:
   Instruction decoder    (Word inst_code);
   void        executor   (Instruction instr);
 
-  Register get_reg(std::size_t spec);
-  Register get_pc ();
-  void     set_reg(std::size_t spec, Register val);
-  void     set_pc (Register val);
+protected:
+  CoreState *cpu;
 
 private:
-  CoreState *cpu;
   Memory     memory_;
 
   void execute_clz (Instruction instr);

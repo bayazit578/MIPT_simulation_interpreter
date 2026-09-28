@@ -31,12 +31,14 @@
                                                                           \
   std::uint32_t field4 = (instr_code >> FIELD4_OFFSET(instr_numb))        \
                          & mask_field4;                                   \
-  instr.field3 &= field4 << FIELD3_WIDTH(instr_numb);                     \
+  instr.field3 |= field4 << FIELD3_WIDTH(instr_numb);                     \
+                                                                          \
+  instr.instr = instr_numb;                                               \
   break;                                                                  \
 }
 
-#define INCR_PC set_pc(get_pc() + sizeof(Word))
-  
+#define INCR_PC cpu->set_pc(cpu->get_pc() + sizeof(Word))
+ 
 
 static SignedWord    sgn_extend(Word value, Word bit_width);
 static std::uint32_t get_mask  (std::uint32_t mask_width);
@@ -67,15 +69,15 @@ static Word sgn_sat(Word reg, Word width) {
 
 
 void Cpu::execute_clz(Instruction instr) {
-  std::uint32_t value = get_reg(instr.field2);
+  std::uint32_t value = cpu->get_reg(instr.field2);
   std::uint32_t mask  = 1 << (kWordSize - 1);
   std::uint32_t i     = 0;
 
-  for (; i < kWordSize || (value & mask) == 0; i++) {
+  for (; i < kWordSize && (value & mask) == 0; i++) {
     value <<= 1;
   }
 
-  set_reg(instr.field1, i);
+  cpu->set_reg(instr.field1, i);
 
   INCR_PC;
 }
@@ -83,31 +85,39 @@ void Cpu::execute_clz(Instruction instr) {
 void Cpu::execute_li(Instruction instr) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend(instr.field3, bit_width);
-  set_reg(instr.field1, (Register)extd_imm);
+  cpu->set_reg(instr.field1, (Register)extd_imm);
 
   INCR_PC;
 }
 
 void Cpu::execute_sysc(Instruction instr) {
+  INCR_PC;
 }
 
 void Cpu::execute_st(Instruction instr) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width);
 
-  std::size_t addr = get_reg(instr.field1) + extd_imm;
-  memory_.store<Word>(addr, get_reg(instr.field2));
+  std::size_t addr = cpu->get_reg(instr.field1) + extd_imm;
+  memory_.store<Word>(addr, cpu->get_reg(instr.field2));
 
   INCR_PC;
 }
 
 void Cpu::execute_stp(Instruction instr) {
-  std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
-  SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width);
+  std::uint32_t field4_mask = get_mask(FIELD4_WIDTH(instr.instr));
+  Word          field4      = (instr.field3 >> FIELD3_WIDTH(instr.instr)) 
+                            & field4_mask;
 
-  std::size_t addr = get_reg(instr.field1) + extd_imm;
-  memory_.store<Word>(addr    , get_reg(instr.field2));
-  memory_.store<Word>(addr + 4, get_reg(instr.field3));
+  std::uint32_t field3_mask = get_mask(FIELD3_WIDTH(instr.instr));
+  Word          field3      = instr.field3 & field3_mask;
+
+  std::uint32_t bit_width = FIELD4_WIDTH(instr.instr);
+  SignedWord    extd_imm  = sgn_extend  (field4, bit_width);
+
+  std::size_t addr = cpu->get_reg(instr.field1) + extd_imm;
+  memory_.store<Word>(addr    , cpu->get_reg(instr.field2));
+  memory_.store<Word>(addr + 4, cpu->get_reg(field3));
 
   INCR_PC;
 }
@@ -117,10 +127,10 @@ void Cpu::execute_bne(Instruction instr) {
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
 
-  bool cond = instr.field1 != instr.field2;
+  bool cond = cpu->get_reg(instr.field1) != cpu->get_reg(instr.field2);
 
-  Word pc_prev = get_pc();
-  set_pc(cond ? pc_prev + target : pc_prev + 4);
+  Word pc_prev = cpu->get_pc();
+  cpu->set_pc(cond ? pc_prev + target : pc_prev + 4);
 
   INCR_PC;
 }
@@ -130,19 +140,21 @@ void Cpu::execute_beq(Instruction instr) {
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
 
-  bool cond = instr.field1 == instr.field2;
+  bool cond = cpu->get_reg(instr.field1) == cpu->get_reg(instr.field2);
 
-  Word pc_prev = get_pc();
-  set_pc(cond ? pc_prev + target : pc_prev + 4);
+  Word pc_prev = cpu->get_pc();
+  cpu->set_pc(cond ? pc_prev + target : pc_prev + 4);
 
   INCR_PC;
 }
 
 void Cpu::execute_selc(Instruction instr) {
-  Register rs1    = get_reg(instr.field2);
-  Register rs2    = get_reg(instr.field3);
-  bool     cond   = rs1 > rs2;
+  Register rs1  = cpu->get_reg(instr.field2);
+  Register rs2  = cpu->get_reg(instr.field3);
+  bool     cond = rs1 > rs2;
+
   Register result = cond ? rs1 : rs2;
+  cpu->set_reg(instr.field1, result);
 
   INCR_PC;
 }
@@ -151,21 +163,21 @@ void Cpu::execute_sti(Instruction instr) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
 
-  std::size_t addr = get_reg(instr.field1) + extd_offset;
-  memory_.store(addr, get_reg(instr.field2));
-  set_reg(instr.field1, addr);
+  std::size_t addr = cpu->get_reg(instr.field1) + extd_offset;
+  memory_.store(addr, cpu->get_reg(instr.field2));
+  cpu->set_reg(instr.field1, addr);
 
   INCR_PC;
 }
 
 void Cpu::execute_j(Instruction instr) {
-  Register pc = get_pc();
-  set_pc((pc & 0xF0000000) | (instr.field3 << 2));
+  Register pc = cpu->get_pc();
+  cpu->set_pc((pc & 0xF0000000) | (instr.field3 << 2));
 }
 
 void Cpu::execute_ssat(Instruction instr) {
-  Register ssatred = sgn_sat(get_reg(instr.field1), instr.field3);
-  set_reg(instr.field1, ssatred);
+  Register ssatred = sgn_sat(cpu->get_reg(instr.field1), instr.field3);
+  cpu->set_reg(instr.field1, ssatred);
 
   INCR_PC;
 }
@@ -174,30 +186,30 @@ void Cpu::execute_ld(Instruction instr) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
 
-  std::size_t addr = get_reg(instr.field1) + extd_offset;
+  std::size_t addr = cpu->get_reg(instr.field1) + extd_offset;
   Word        val  = memory_.load<Word>(addr);
-  set_reg(instr.field2, val);
+  cpu->set_reg(instr.field2, val);
 
   INCR_PC;
 }
 
 void Cpu::execute_sbit(Instruction instr) {
   Register sbit = 1 << instr.field3;
-  set_reg(instr.field1, sbit);
+  cpu->set_reg(instr.field1, sbit);
 
   INCR_PC;
 }
 
 void Cpu::execute_add(Instruction instr) {
-  Register sum = get_reg(instr.field1) + get_reg(instr.field2);
-  set_reg(instr.field3, sum);
+  Register sum = cpu->get_reg(instr.field1) + cpu->get_reg(instr.field3);
+  cpu->set_reg(instr.field2, sum);
 
   INCR_PC;
 }
 
 void Cpu::execute_addi(Instruction instr) {
-  Register sum = get_reg(instr.field1) + instr.field3;
-  set_reg(instr.field2, sum);
+  Register sum = cpu->get_reg(instr.field1) + instr.field3;
+  cpu->set_reg(instr.field2, sum);
 
   INCR_PC;
 }
@@ -207,11 +219,11 @@ void Cpu::load_instrs(std::vector<Word> &instrs) {
 }
 
 Word Cpu::fetch_instr() {
-  return memory_.load<Word>(get_pc());
+  return memory_.load<Word>(cpu->get_pc());
 }
 
 Instruction Cpu::decoder(Word instr_code) {
-  Instruction instr;
+  Instruction instr{};
   GET_OPCODE(instr_code, instr);
 
   switch(instr.opc) {
@@ -230,6 +242,8 @@ Instruction Cpu::decoder(Word instr_code) {
     case Opcode::opSbit : GET_ALL_FIELDS(kSbit);
     case Opcode::opAdd  : GET_ALL_FIELDS(kAdd );
     case Opcode::opAddi : GET_ALL_FIELDS(kAddi);
+    default:
+      throw std::runtime_error("cpu::decoder: unknown instr opcode");
   }
 
   return instr;
@@ -237,40 +251,40 @@ Instruction Cpu::decoder(Word instr_code) {
 
 void Cpu::executor(Instruction instr) {
   switch(instr.instr) {
-    case kClz: 
-      execute_clz (instr);
+    case kClz:
+      execute_clz(instr);
       break;
-    case kLi: 
-      execute_li  (instr);
+    case kLi:
+      execute_li(instr);
       break;
-    case kSysc: 
+    case kSysc:
       execute_sysc(instr);
       break;
-    case kSt: 
-      execute_st  (instr);
+    case kSt:
+      execute_st(instr);
       break;
-    case kStp: 
+    case kStp:
       execute_stp(instr);
       break;
-    case kBne: 
+    case kBne:
       execute_bne(instr);
       break;
-    case kBeq: 
+    case kBeq:
       execute_beq(instr);
       break;
-    case kSelc: 
+    case kSelc:
       execute_selc(instr);
       break;
-    case kSti: 
+    case kSti:
       execute_sti(instr);
       break;
-    case kJ: 
+    case kJ:
       execute_j(instr);
       break;
-    case kSsat: 
+    case kSsat:
       execute_ssat(instr);
       break;
-    case kLd: 
+    case kLd:
       execute_ld(instr);
       break;
     case kSbit: 
@@ -285,18 +299,28 @@ void Cpu::executor(Instruction instr) {
   }
 }
 
-Register Cpu::get_reg(std::size_t spec) {
-  return cpu->gpr_regs[spec];
+Register CoreState::get_reg(std::size_t spec) {
+  check_range(spec);
+
+  return gpr_regs[spec];
 }
 
-Register Cpu::get_pc() {
-  return cpu->pc;
+Register CoreState::get_pc() {
+  return pc;
 }
 
-void Cpu::set_reg(std::size_t spec, Register val) {
-  cpu->gpr_regs[spec] = val;
+void CoreState::set_reg(std::size_t spec, Register val) {
+  check_range(spec);
+
+  gpr_regs[spec] = val;
 }
 
-void Cpu::set_pc(Register val) {
-  cpu->pc = val;
+void CoreState::set_pc(Register val) {
+  pc = val;
+}
+
+void CoreState::check_range(std::size_t spec) {
+  if (spec < 0 || spec >= kNumRegs) {
+    throw std::out_of_range("cpu: register is out of range");
+  }
 }

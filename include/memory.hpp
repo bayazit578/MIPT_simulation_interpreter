@@ -23,10 +23,14 @@ public:
   void store(std::size_t addr, M value);
 
   void load_instrs(std::size_t addr, std::vector<Word> instrs) {
-    if (addr + instrs.size() > kMemorySize - 1)
-      throw std::runtime_error("memory: access out of bounds");
+    if (addr > data.size()
+      || instrs.size() > (kMemorySize - addr) / sizeof(Word)) {
+      throw std::runtime_error("memory: program does't fit in memory");
+    }
 
-    std::memcpy(data.data() + addr, instrs.data(), sizeof(std::byte) * instrs.size());
+    std::memcpy(data.data() + addr, 
+                instrs.data(), 
+                instrs.size() * sizeof(Word));
   }
 
 private:
@@ -58,6 +62,6 @@ void Memory::store(std::size_t addr, M value) {
 template<MemoryType M>
 void Memory::check_range(std::size_t addr) const {
   if (addr < 0 || addr >= data.size() || sizeof(M) > data.size() - addr) {
-    throw std::runtime_error("Memory address out of range\n");
+    throw std::runtime_error("memory: addr is out of range\n");
   }
 }

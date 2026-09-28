@@ -4,7 +4,7 @@ OUT_DIR      = build
 EXEC         = interpreter
 
 # flags
-CXXFLAGS       = 
+CXXFLAGS       =  
 CXXFLAGS_RUN   = -DNDEBUG
 CXXFLAGS_DEBUG = -O2 -g
 CXXFLAGS_ASAN  = -fcheck-new -fsized-deallocation -fstack-protector \

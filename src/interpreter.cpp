@@ -1,28 +1,42 @@
 #include "interpreter.hpp"
 
 int Interpreter::load_program(std::string fname) {
-  std::ifstream file{fname, std::ios::binary | std::ios::ate};
-  if (!file.is_open()) {
-    std::cerr << "erroe with file opening" << std::endl;
-  }
-
-  const std::streamoff fsize = file.tellg();
-  std::vector<Word> instrs {static_cast<std::uint32_t>(fsize)};
-
-  file.seekg(std::ios::beg);
-  if(!file.read(reinterpret_cast<char*>(instrs.data()), fsize)) {
-    std::cerr << "interpreter: could not read file" << std::endl;
+  std::ifstream file(fname, std::ios::binary | std::ios::ate);
+  if (!file) {
+    std::cerr << "interpreter: could not open file\n";
     return EXIT_FAILURE;
   }
 
-  cpu_.load_instrs(instrs);
+  const std::streamoff byte_count = file.tellg();
+  if (byte_count < 0 
+   || byte_count > kMemorySize
+   || byte_count % sizeof(Word) != 0) {
+    std::cerr << "interpreter: invalid program size\n";
+    return EXIT_FAILURE;
+  }
 
+  const std::size_t word_count =
+      static_cast<std::size_t>(byte_count) / sizeof(Word);
+  std::vector<Word> instr_buf(word_count);
+
+  if (!file.seekg(0, std::ios::beg)) {
+    std::cerr << "interpreter: could not seek to file start\n";
+    return EXIT_FAILURE;
+  }
+
+  if (byte_count > 0 &&
+      !file.read(reinterpret_cast<char*>(instr_buf.data()),
+                 static_cast<std::streamsize>(byte_count))) {
+    std::cerr << "interpreter: could not read file\n";
+    return EXIT_FAILURE;
+  }
+
+  cpu_.load_instrs(instr_buf);
   return EXIT_SUCCESS;
 }
 
-void Interpreter::inter() {
-  Cpu cpu;
-  Word instr_code   = cpu.fetch_instr();
-  Instruction instr = cpu.decoder(instr_code);
-  cpu.executor(instr);
+void Interpreter::iter() {
+  Word instr_code   = cpu_.fetch_instr();
+  Instruction instr = cpu_.decoder(instr_code);
+  cpu_.executor(instr);
 }

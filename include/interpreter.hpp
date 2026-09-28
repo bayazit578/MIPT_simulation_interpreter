@@ -16,7 +16,7 @@ public:
   }
 
   int load_program(std::string fname);
-  void inter();
+  void iter();
 
   bool terminated() {
     return terminated_;
