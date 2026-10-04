@@ -40,8 +40,8 @@ INSTR_INFO = {
     operands: {
       field1: { offset: 0x10, width: 0x05, type: :reg },
       field2: { offset: 0x0B, width: 0x05, type: :reg },
-      field3: { offset: 0x15, width: 0x05, type: :reg },
-      field4: { offset: 0x00, width: 0x0B, type: :imm }
+      field3: { offset: 0x00, width: 0x0B, type: :imm },
+      field4: { offset: 0x15, width: 0x05, type: :reg }
     }
   },
   bne: {
@@ -138,13 +138,17 @@ INSTR_INFO = {
 
 
 class Assembler
+  attr_accessor :buf, :labels
+
   def initialize(out_file)
-    @file = File.open(out_file, "wb")
+    @labels = {}
+    @buf    = []
+    @file   = File.open(out_file, "wb")
   end
 
   def insert_field(base, value, offset, width)
     raise ArgumentError, "invalid offset" if offset < 0
-    raise ArgumentError, "invalid width"  if width <= 0
+    raise ArgumentError, "invalid width"  if width  < 0
 
     field_mask = (1 << width) - 1
 
@@ -160,7 +164,7 @@ class Assembler
   INSTR_INFO.each do |mnemonic, info|
     define_method(mnemonic) do |*args|
       instr_code = 0
-      
+
       opcode        = info.dig(:opcode, :code  )
       opcode_offset = info.dig(:opcode, :offset)
       instr_code    = insert_field(
@@ -169,7 +173,7 @@ class Assembler
                         opcode_offset,
                         6)
 
-      fields = [:field1, :field2, :field3]
+      fields = [:field1, :field2, :field3, :field4]
 
       fields.zip(args).each do |field, arg|
         if info.dig(:operands, field, :type) == :reg
@@ -214,13 +218,46 @@ begin
   File.foreach(ARGV[0]) do |line|
     splitted_line = line.split(" ", 2)
 
-    mnemonic = splitted_line[0].strip
+    mnemonic = splitted_line[0].strip.to_sym
     args     = splitted_line[1].split(",")
 
-    args.map!(&:strip)
+    args.map! { |arg| arg.gsub(/\s+/, "") }
+
+    case mnemonic
+      when :ld, :st
+        args[1] = args[1].delete("[")
+        args[2] = args[2].delete("]")
+      when :stp
+        offset, base = args.fetch(2).split("(", 2)
+        args[2] = offset
+        args[3] = base.delete(")")
+    end
+
+    asm.buf << {
+      mnemonic: mnemonic,
+      args:     args
+    }
+
+    if mnemonic.end_with?(":")
+      asm.buf.pop
+      mnemonic = mnemonic.to_s.delete(":").to_sym
+
+      asm.labels[mnemonic] = asm.buf.length
+    end
+
+  end
+
+  asm.buf.each do |instr|
+    mnemonic = instr[:mnemonic]
+    args     = instr[:args]
+
+    if mnemonic == :j
+      args[0] = asm.labels[args[0].to_sym]
+    end
 
     asm.send(mnemonic, *args)
   end
+
 ensure
   asm.close
 end
