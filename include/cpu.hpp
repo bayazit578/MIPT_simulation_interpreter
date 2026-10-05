@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <vector>
 #include <iostream>
+#include <queue>
 
 #include "memory.hpp"
 #include "isa.hpp"
@@ -55,11 +56,24 @@ public:
   Instruction decoder    (Word inst_code);
   void        executor   (Instruction instr);
 
+  Register pc () {
+    return cpu->get_pc();
+  }
+
+  Register reg(std::size_t spec) {
+    return cpu->get_reg(spec);
+  }
+
+  using BasicBlock = std::vector<Instruction>;
+
+  void     execute_block       (BasicBlock &blk);
+  Register prefetch_basic_block(BasicBlock &blk);
+
 protected:
   CoreState *cpu;
 
 private:
-  Memory     memory_;
+  Memory memory_;
 
   void execute_clz (Instruction instr);
   void execute_li  (Instruction instr);

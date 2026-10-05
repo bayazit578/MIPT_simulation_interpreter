@@ -38,6 +38,12 @@
 }
 
 #define INCR_PC cpu->set_pc(cpu->get_pc() + sizeof(Word))
+
+#define IS_CTRL(instr) \
+  (  instr.instr == kJ          \
+  || instr.instr == kBne        \
+  || instr.instr == kBeq        \
+  || instr.instr == kSysc)      \
  
 
 static SignedWord    sgn_extend(Word value, Word bit_width);
@@ -67,6 +73,25 @@ static Word sgn_sat(Word reg, Word width) {
   return std::bit_cast<Word>(res);
 }
 
+void Cpu::execute_block(BasicBlock &blk) {
+  for(auto& instr : blk) {
+    executor(instr);
+  }
+}
+
+Register Cpu::prefetch_basic_block(BasicBlock& blk) {
+  Register begin_pc = cpu->get_pc();
+  Instruction instr{};
+
+  while (!IS_CTRL(instr)) {
+    instr = decoder(fetch_instr());
+    blk.push_back(instr);
+    INCR_PC;
+  }
+
+  cpu->set_pc(begin_pc);
+  return begin_pc;
+}
 
 void Cpu::execute_clz(Instruction instr) {
   std::uint32_t value = cpu->get_reg(instr.field2);
@@ -99,6 +124,7 @@ void Cpu::execute_sysc(Instruction instr) {
   }
 
   INCR_PC;
+  throw sysc;
 }
 
 void Cpu::execute_st(Instruction instr) {
@@ -137,9 +163,8 @@ void Cpu::execute_bne(Instruction instr) {
   bool cond = cpu->get_reg(instr.field1) != cpu->get_reg(instr.field2);
 
   Word pc_prev = cpu->get_pc();
-  cpu->set_pc(cond ? pc_prev + target : pc_prev + 4);
-
-  INCR_PC;
+  cpu->set_pc(cond ? pc_prev + sizeof(Word) + target
+                   : pc_prev + sizeof(Word));
 }
 
 void Cpu::execute_beq(Instruction instr) {
@@ -150,9 +175,8 @@ void Cpu::execute_beq(Instruction instr) {
   bool cond = cpu->get_reg(instr.field1) == cpu->get_reg(instr.field2);
 
   Word pc_prev = cpu->get_pc();
-  cpu->set_pc(cond ? pc_prev + target : pc_prev + 4);
-
-  INCR_PC;
+  cpu->set_pc(cond ? pc_prev + sizeof(Word) + target
+                   : pc_prev + sizeof(Word));
 }
 
 void Cpu::execute_selc(Instruction instr) {
@@ -215,7 +239,9 @@ void Cpu::execute_add(Instruction instr) {
 }
 
 void Cpu::execute_addi(Instruction instr) {
-  Register sum = cpu->get_reg(instr.field1) + instr.field3;
+  const std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
+  const SignedWord immediate = sgn_extend(instr.field3, bit_width);
+  Register sum = cpu->get_reg(instr.field1) + immediate;
   cpu->set_reg(instr.field2, sum);
 
   INCR_PC;
@@ -249,8 +275,6 @@ Instruction Cpu::decoder(Word instr_code) {
     case Opcode::opSbit : GET_ALL_FIELDS(kSbit);
     case Opcode::opAdd  : GET_ALL_FIELDS(kAdd );
     case Opcode::opAddi : GET_ALL_FIELDS(kAddi);
-    default:
-      throw std::runtime_error("cpu::decoder: unknown instr opcode");
   }
 
   return instr;

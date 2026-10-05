@@ -37,9 +37,18 @@ int Interpreter::load_program(std::string fname) {
 
 void Interpreter::iter() {
   try {
-    Word instr_code   = cpu_.fetch_instr();
-    Instruction instr = cpu_.decoder(instr_code);
-    cpu_.executor(instr);
+    auto cache_it = cache_.find(cpu_.pc());
+
+    if (cache_it != cache_.end()) {
+        cpu_.execute_block(cache_it->second);
+        return;
+    }
+
+    Cpu::BasicBlock blk;
+
+    Register begin_pc = cpu_.prefetch_basic_block(blk);
+    cache_[begin_pc] = blk;
+    cpu_.execute_block(blk);
   }
 
   catch (const Syscall &sysc) {

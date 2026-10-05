@@ -4,6 +4,7 @@
 #include <fstream>
 #include <vector>
 #include <iostream>
+#include <unordered_map>
 
 #include "cpu.hpp"
 #include "isa.hpp"
@@ -27,6 +28,9 @@ public:
   }
 
 private:
+  using InstrCache = std::unordered_map<Register, Cpu::BasicBlock>;
+
+  InstrCache  cache_;
   Cpu         cpu_;
   bool        terminated_;
   int         exit_code_;

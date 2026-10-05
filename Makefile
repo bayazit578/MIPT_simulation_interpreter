@@ -10,7 +10,7 @@ TEST_SRC  = $(filter-out src/main.cpp,$(SRC)) \
 TEST_OBJ  = $(patsubst %.cpp,$(OUT_DIR)/gtests/%.o,$(TEST_SRC))
 TEST_EXEC = interpreter_tests
 ASM_SRC   = $(wildcard tests/asm/*.asm)
-ASM_BIN   = $(patsubst tests/asm/%.asm,tests/bin/%.asm,$(ASM_SRC))
+ASM_BIN   = $(patsubst tests/asm/%.asm,tests/bin/%.test,$(ASM_SRC))
 
 # flags
 CXX            = g++
@@ -47,7 +47,7 @@ $(OUT_DIR)/gtests/%.o: %.cpp
 	@mkdir -p $(@D)
 	@$(CXX) $(CXXFLAGS_GP) -I$(INCLUDE_DIRS) $(CXXFLAGS_DEBUG) -pthread -c $< -o $@
 
-tests/bin/%.asm: tests/asm/%.asm asm.rb
+tests/bin/%.test: tests/asm/%.asm asm.rb
 	@mkdir -p $(@D)
 	@ruby asm.rb $< $@
 
