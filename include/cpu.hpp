@@ -77,3 +77,8 @@ private:
   void execute_add (Instruction isntr);
   void execute_addi(Instruction instr);
 };
+
+struct Syscall {
+  Register num;
+  std::array<Register, kSyscArgNum> args;
+};

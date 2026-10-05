@@ -36,7 +36,20 @@ int Interpreter::load_program(std::string fname) {
 }
 
 void Interpreter::iter() {
-  Word instr_code   = cpu_.fetch_instr();
-  Instruction instr = cpu_.decoder(instr_code);
-  cpu_.executor(instr);
+  try {
+    Word instr_code   = cpu_.fetch_instr();
+    Instruction instr = cpu_.decoder(instr_code);
+    cpu_.executor(instr);
+  }
+
+  catch (const Syscall &sysc) {
+    switch (sysc.num) {
+      case kExit : 
+        exit_code_  = sysc.args[0];
+        terminated_ = true;
+        break;
+      default: 
+        throw std::runtime_error("interpreter: unknown syscall");
+    }
+  }
 }

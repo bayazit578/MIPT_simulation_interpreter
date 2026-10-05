@@ -91,6 +91,13 @@ void Cpu::execute_li(Instruction instr) {
 }
 
 void Cpu::execute_sysc(Instruction instr) {
+  Syscall sysc;
+  sysc.num = cpu->get_reg(kSyscNumReg);
+
+  for (std::uint8_t i = 0; i < kSyscArgNum; i++) {
+    sysc.args[i] = cpu->get_reg(i);
+  }
+
   INCR_PC;
 }
 

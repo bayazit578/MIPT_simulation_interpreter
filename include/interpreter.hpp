@@ -11,7 +11,7 @@
 class Interpreter {
 public:
   Interpreter()
-    : terminated_{false}
+    : terminated_{false}, exit_code_{0}
   {
   }
 
@@ -22,7 +22,12 @@ public:
     return terminated_;
   }
 
+  int exit_code() {
+    return exit_code_;
+  }
+
 private:
-  Cpu  cpu_;
-  bool terminated_;
+  Cpu         cpu_;
+  bool        terminated_;
+  int         exit_code_;
 };

@@ -1,3 +1,4 @@
 compile_commands.json
 interpreter
 .gdb_history
+build/

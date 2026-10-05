@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include "cpu.hpp"
 #include "interpreter.hpp"
 
@@ -8,8 +6,12 @@ int main(const int argc, char *argv[]) {
   if (interpreter.load_program("test_program.bin") != EXIT_SUCCESS) {
     return EXIT_FAILURE;
   }
+  
+  Word iters;
 
-  for (int i = 0; i < 3; ++i) {
+  while (!interpreter.terminated()) {
     interpreter.iter();
   }
+
+  return EXIT_SUCCESS;
 }

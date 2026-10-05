@@ -14,6 +14,8 @@ concept MemoryType =
 constexpr std::uint32_t kNumRegs    = 32;
 constexpr std::uint32_t kWordSize   = 32;
 constexpr std::uint32_t kMemorySize = 1024;
+constexpr std::uint32_t kSyscArgNum = 6;
+constexpr std::uint32_t kSyscNumReg = 7;
 
 enum InstrNumb : std::uint8_t {
   kClz  =  0,
@@ -94,4 +96,8 @@ constexpr InstrFieldInfo oper_info[] = {
   {kSbit, Opcode::opSbit, {0x15, 0x05}, {0x10, 0x05}, {0x0B, 0x05}, {0x00, 0x00}},
   {kAdd , Opcode::opAdd , {0x15, 0x05}, {0x10, 0x05}, {0x0B, 0x05}, {0x00, 0x00}},
   {kAddi, Opcode::opAddi, {0x15, 0x05}, {0x10, 0x05}, {0x00, 0x10}, {0x00, 0x00}}
+};
+
+enum Sysc : std::uint32_t {
+  kExit = 0x5d
 };

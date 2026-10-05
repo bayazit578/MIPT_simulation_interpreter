@@ -251,9 +251,9 @@ begin
     mnemonic = instr[:mnemonic]
     args     = instr[:args]
 
-    if mnemonic == :j
-      args[0] = asm.labels[args[0].to_sym]
-    end
+  if mnemonic == :j && !args[0].match?(/\A-?\d+\z/)
+    args[0] = asm.labels[args[0].to_sym]
+  end
 
     asm.send(mnemonic, *args)
   end
