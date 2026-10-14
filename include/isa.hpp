@@ -53,7 +53,7 @@ enum class Opcode : std::uint8_t {
   opAddi = 0b011100
 };
 
-struct Instruction {
+struct Instr {
 public:
   InstrNumb instr;
 
@@ -62,7 +62,6 @@ public:
   Byte      field1{}, field2{};
   Word      field3{};
 };
-
 
 struct InstrFieldInfo {
 public:

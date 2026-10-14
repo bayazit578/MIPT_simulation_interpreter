@@ -11,11 +11,13 @@
 
 using Register = std::uint32_t;
 
+
 #ifdef DEBUG
 #define IF_DEBUG(...) __VA_ARGS__
 #else
 #define IF_DEBUG(...)
 #endif
+
 
 struct CoreState {
 public:
@@ -50,12 +52,7 @@ public:
   ~Cpu() {
     delete cpu;
   }
-
-  void        load_instrs(std::vector<Word> &instrs);
-  Word        fetch_instr();
-  Instruction decoder    (Word inst_code);
-  void        executor   (Instruction instr);
-
+  
   Register pc () {
     return cpu->get_pc();
   }
@@ -64,35 +61,66 @@ public:
     return cpu->get_reg(spec);
   }
 
-  using BasicBlock = std::vector<Instruction>;
+  void  load_instrs(std::vector<Word> &instrs);
+  Word  fetch_instr();
+  Instr decoder    (Word inst_code);
 
-  void     execute_block       (BasicBlock &blk);
-  Register prefetch_basic_block(BasicBlock &blk);
+  using BasicBlock = std::vector<Instr>;
+
+  virtual void     execute_block       (BasicBlock &blk);
+  virtual Register prefetch_basic_block(BasicBlock &blk);
 
 protected:
-  CoreState *cpu;
+  struct Syscall {
+    Register num;
+    std::array<Register, kSyscArgNum> args;
+  };
+
+  using Handler = void (Cpu::*) (Instr);
+
+  void execute_clz (Instr instr);
+  void execute_li  (Instr instr);
+  void execute_sysc(Instr instr);
+  void execute_st  (Instr instr);
+  void execute_stp (Instr instr);
+  void execute_bne (Instr instr);
+  void execute_beq (Instr instr);
+  void execute_selc(Instr instr);
+  void execute_sti (Instr instr);
+  void execute_j   (Instr instr);
+  void execute_ssat(Instr instr);
+  void execute_ld  (Instr instr);
+  void execute_sbit(Instr instr);
+  void execute_add (Instr isntr);
+  void execute_addi(Instr instr);
 
 private:
-  Memory memory_;
-
-  void execute_clz (Instruction instr);
-  void execute_li  (Instruction instr);
-  void execute_sysc(Instruction instr);
-  void execute_st  (Instruction instr);
-  void execute_stp (Instruction instr);
-  void execute_bne (Instruction instr);
-  void execute_beq (Instruction instr);
-  void execute_selc(Instruction instr);
-  void execute_sti (Instruction instr);
-  void execute_j   (Instruction instr);
-  void execute_ssat(Instruction instr);
-  void execute_ld  (Instruction instr);
-  void execute_sbit(Instruction instr);
-  void execute_add (Instruction isntr);
-  void execute_addi(Instruction instr);
+  CoreState *cpu;
+  Memory    memory_;
 };
 
-struct Syscall {
-  Register num;
-  std::array<Register, kSyscArgNum> args;
+
+class BtCdExec : public Cpu {
+public:
+  void execute_block (BasicBlock &blk) override;
+
+private:
+  void executor (Instr instr);
+};
+
+
+class ThrdCdExec : public Cpu {
+public:
+
+  struct ThrdCdCell {
+  public:
+
+    InstrNumb instr;
+    Handler   handler;
+  };
+
+  void execute_block (BasicBlock &blk) override;
+
+private:
+  Handler handler(InstrNumb instr);
 };

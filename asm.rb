@@ -192,8 +192,6 @@ class Assembler
                        width)
       end
 
-      puts format("%032b\n", instr_code)
-
       write_binary(instr_code)
     end
   end
