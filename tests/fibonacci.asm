@@ -7,7 +7,7 @@ li x4, 0
 loop:
 bne x1, x4, 1
 j output
-add x2, x3, x5
+add x5, x2, x3
 addi x2, x3, 0
 addi x3, x5, 0
 addi x1, x1, 65535

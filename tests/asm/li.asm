@@ -5,7 +5,7 @@ j fail
 j fail
 li x1, 65535
 li x2, 1
-add x1, x2, x3
+add x3, x1, x2
 beq x3, x8, 2
 j fail
 j fail

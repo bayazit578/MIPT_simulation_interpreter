@@ -37,7 +37,7 @@ shift_crc:
 ld x14, [x11, 4]
 ld x15, [x12, 0]
 beq x6, x0, 1
-add x14, x15, x14
+add x14, x14, x15
 bne x14, x2, 1
 addi x14, x14, 65534
 st x14, [x11, 0]

@@ -248,8 +248,8 @@ void BtCdExec::execute_sbit(Instr instr) {
 }
 
 void BtCdExec::execute_add(Instr instr) {
-  Register sum = cpu->get_reg(instr.field1) + cpu->get_reg(instr.field3);
-  cpu->set_reg(instr.field2, sum);
+  Register sum = cpu->get_reg(instr.field2) + cpu->get_reg(instr.field3);
+  cpu->set_reg(instr.field1, sum);
 
   INCR_PC;
 }
@@ -450,8 +450,8 @@ void ThrdExec::execute_sbit(Instr instr, const Instr* next, const Instr* end) {
 }
 
 void ThrdExec::execute_add(Instr instr, const Instr* next, const Instr* end) {
-  Register sum = cpu->get_reg(instr.field1) + cpu->get_reg(instr.field3);
-  cpu->set_reg(instr.field2, sum);
+  Register sum = cpu->get_reg(instr.field2) + cpu->get_reg(instr.field3);
+  cpu->set_reg(instr.field1, sum);
 
   INCR_PC;
   if (next == end) {

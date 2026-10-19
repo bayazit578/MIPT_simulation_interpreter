@@ -119,9 +119,9 @@ INSTR_INFO = {
   add: {
     opcode: { code: 0b000011, offset: 0x00 },
     operands: {
-      field1: { offset: 0x0B, width: 0x05, type: :reg },
-      field2: { offset: 0x15, width: 0x05, type: :reg },
-      field3: { offset: 0x10, width: 0x05, type: :reg },
+      field1: { offset: 0x15, width: 0x05, type: :reg },
+      field2: { offset: 0x10, width: 0x05, type: :reg },
+      field3: { offset: 0x0B, width: 0x05, type: :reg },
       field4: { offset: 0x00, width: 0x00, type:  nil }
     }
   },
