@@ -19,7 +19,7 @@ To verify the simulator's functionality, run the Fibonacci example:
 1. Assemble the program using `rb.asm`:
 
    ```sh
-   ruby rb.asm
+   ruby asm.rb tests/fibonacci.asm tests/bin/fibonacci.test
    ```
 
 2. Run the simulator:
