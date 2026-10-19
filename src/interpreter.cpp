@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+#include <unistd.h>
 
 int Interpreter::load_program(std::string fname) {
   std::ifstream file(fname, std::ios::binary | std::ios::ate);
@@ -54,6 +55,27 @@ void Interpreter::iter() {
       case kExit : 
         exit_code_  = sysc.args[0];
         terminated_ = true;
+        break;
+      case kWrite: {
+        auto* buf = cpu_->guest_ptr(sysc.args[1], sysc.args[2]);
+        ::write(sysc.args[0], buf, sysc.args[2]);
+        break;
+      }
+      case kRead: {
+        auto* buf = cpu_->guest_ptr(sysc.args[1], sysc.args[2]);
+        ::read(sysc.args[0], buf, sysc.args[2]);
+        break;
+      }
+      case kReadInt: {
+        Register value = 0;
+        if (!(std::cin >> value)) {
+          throw std::runtime_error("interpreter: could not read integer");
+        }
+        cpu_->set_syscall_result(value);
+        break;
+      }
+      case kWriteInt:
+        std::cout << sysc.args[0] << std::endl;
         break;
       default: 
         throw std::runtime_error("interpreter: unknown syscall");

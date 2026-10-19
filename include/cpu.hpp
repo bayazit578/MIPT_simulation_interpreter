@@ -73,6 +73,10 @@ public:
     return cpu->get_reg(spec);
   }
 
+  void set_syscall_result(Register value) {
+    cpu->set_reg(0, value);
+  }
+
   void  load_instrs(std::vector<Word> &instrs);
   Word  fetch_instr(size_t address);
   Instr decoder    (Word inst_code);
@@ -83,6 +87,10 @@ public:
     Register num;
     std::array<Register, kSyscArgNum> args;
   };
+
+  Byte* guest_ptr(std::size_t addr, std::size_t count) {
+    return memory_.ptr(addr, count);
+  }
 
 protected:
   CoreState *cpu;

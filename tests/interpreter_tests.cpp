@@ -35,5 +35,3 @@ INSTANTIATE_TEST_SUITE_P(LdTest   , InterpreterTest, testing::Values("tests/bin/
 INSTANTIATE_TEST_SUITE_P(SbitTest , InterpreterTest, testing::Values("tests/bin/sbit.test"));
 INSTANTIATE_TEST_SUITE_P(AddTest  , InterpreterTest, testing::Values("tests/bin/add.test" ));
 INSTANTIATE_TEST_SUITE_P(AddiTest , InterpreterTest, testing::Values("tests/bin/addi.test"));
-
-INSTANTIATE_TEST_SUITE_P(Fibonacci, InterpreterTest, testing::Values("tests/bin/fibonacci.bin"));

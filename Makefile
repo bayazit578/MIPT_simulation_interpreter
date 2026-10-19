@@ -11,12 +11,16 @@ TEST_OBJ  = $(patsubst %.cpp,$(OUT_DIR)/gtests/%.o,$(TEST_SRC))
 TEST_EXEC = interpreter_tests
 ASM_SRC   = $(wildcard tests/asm/*.asm)
 ASM_BIN   = $(patsubst tests/asm/%.asm,tests/bin/%.test,$(ASM_SRC))
+FIB_BIN   = tests/bin/fibonacci.bin
+FIB_TEST_BIN = tests/bin/fibonacci.test
 
 # performance
-CRC_EXEC     = crc32
-CRC_ASM_BIN  = tests/bin/crc32.test
-SORT_EXEC    = sort
-SORT_ASM_BIN = tests/bin/sort.test
+CRC_EXEC         = crc32
+CRC_ASM_BIN      = tests/bin/crc32.test
+SORT_EXEC        = sort
+SORT_ASM_BIN     = tests/bin/sort.test
+BRANCHES_EXEC    = branches
+BRANCHES_ASM_BIN = tests/bin/branches.test
 
 # flags
 CXX            = g++
@@ -43,7 +47,7 @@ $(OUT_DIR)/%.o: src/%.cpp
 	@$(CXX) $(CXXFLAGS_GP) -I$(INCLUDE_DIRS) $(CXXFLAGS_RUN) -MMD -MP -c $< -o $@
 
 
-tests: $(ASM_BIN) $(OUT_DIR)/gtests/$(TEST_EXEC)
+tests: $(ASM_BIN) $(FIB_BIN) $(FIB_TEST_BIN) $(OUT_DIR)/gtests/$(TEST_EXEC)
 	./$(OUT_DIR)/gtests/$(TEST_EXEC)
 
 $(OUT_DIR)/gtests/$(TEST_EXEC): $(TEST_OBJ)
@@ -57,10 +61,14 @@ tests/bin/%.test: tests/asm/%.asm asm.rb
 	@mkdir -p $(@D)
 	@ruby asm.rb $< $@
 
+$(FIB_BIN) $(FIB_TEST_BIN): tests/fibonacci.asm asm.rb
+	@mkdir -p $(@D)
+	@ruby asm.rb $< $@
+
 
 crc32: $(CRC_ASM_BIN) $(OUT_DIR)/crc32/$(CRC_EXEC)
-	hyperfine -w 10 -r 100 './$(OUT_DIR)/crc32/$(CRC_EXEC) -m b -i $(CRC_ASM_BIN)' \
-											 './$(OUT_DIR)/crc32/$(CRC_EXEC) -m t -i $(CRC_ASM_BIN)'
+	hyperfine -w 10 -r 10000 './$(OUT_DIR)/crc32/$(CRC_EXEC) -m b -i $(CRC_ASM_BIN)' \
+											   './$(OUT_DIR)/crc32/$(CRC_EXEC) -m t -i $(CRC_ASM_BIN)'
 
 $(OUT_DIR)/crc32/$(CRC_EXEC): $(OBJ)
 	@mkdir -p $(@D)
@@ -68,19 +76,27 @@ $(OUT_DIR)/crc32/$(CRC_EXEC): $(OBJ)
 
 
 sort: $(SORT_ASM_BIN) $(OUT_DIR)/sort/$(SORT_EXEC)
-	hyperfine -w 5 -r 10 './$(OUT_DIR)/sort/$(SORT_EXEC) -m b -i $(SORT_ASM_BIN)' \
-												'./$(OUT_DIR)/sort/$(SORT_EXEC) -m t -i $(SORT_ASM_BIN)'
+	hyperfine -w 10 -r 100 './$(OUT_DIR)/sort/$(SORT_EXEC) -m b -i $(SORT_ASM_BIN)' \
+											   './$(OUT_DIR)/sort/$(SORT_EXEC) -m t -i $(SORT_ASM_BIN)'
 
 $(OUT_DIR)/sort/$(SORT_EXEC): $(OBJ)
 	@mkdir -p $(@D)
 	@$(CXX) $(OBJ) -o $@
 
 
+branches: $(BRANCHES_ASM_BIN) $(OUT_DIR)/branches/$(BRANCHES_EXEC)
+	hyperfine -w 5 -r 10 './$(OUT_DIR)/branches/$(BRANCHES_EXEC) -m b -i $(BRANCHES_ASM_BIN)' \
+											 './$(OUT_DIR)/branches/$(BRANCHES_EXEC) -m t -i $(BRANCHES_ASM_BIN)'
+
+$(OUT_DIR)/branches/$(BRANCHES_EXEC): $(OBJ)
+	@mkdir -p $(@D)
+	@$(CXX) $(OBJ) -o $@
+
 run: all
 	@./$(OUT_DIR)/$(EXEC)
 
 clean:
 	@rm -rf $(OUT_DIR)
-	@rm -f $(ASM_BIN)
+	@rm -f $(ASM_BIN) $(FIB_TEST_BIN)
 
 -include $(OBJ:.o=.d) $(TEST_OBJ:.o=.d)

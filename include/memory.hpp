@@ -33,6 +33,12 @@ public:
                 instrs.size() * sizeof(Word));
   }
 
+  Byte* ptr(std::size_t addr, std::size_t count) {
+    if (addr > data.size() || count > data.size() - addr)
+      throw std::out_of_range("invalid guest buffer");
+    return data.data() + addr;
+  }
+
 private:
   std::array<std::uint8_t, kMemorySize> data;
 

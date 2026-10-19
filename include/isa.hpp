@@ -97,5 +97,9 @@ constexpr InstrFieldInfo oper_info[] = {
 };
 
 enum Sysc : std::uint32_t {
-  kExit = 0x5d
+  kExit  = 0x5d,
+  kWrite = 0x3f,
+  kRead  = 0x40,
+  kReadInt  = 0x41,
+  kWriteInt = 0x42
 };

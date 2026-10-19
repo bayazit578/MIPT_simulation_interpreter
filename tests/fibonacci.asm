@@ -1,63 +1,21 @@
-li   x1, 0
-li   x2, 1
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 1
-beq  x2, x4, 1
-j    fail
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 2
-beq  x2, x4, 1
-j    fail
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 3
-beq  x2, x4, 1
-j    fail
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 5
-beq  x2, x4, 1
-j    fail
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 8
-beq  x2, x4, 1
-j    fail
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 13
-beq  x2, x4, 1
-j    fail
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 21
-beq  x2, x4, 1
-j    fail
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 34
-beq  x2, x4, 1
-j    fail
-add  x2, x1, x3
-addi x1, x2, 0
-addi x2, x3, 0
-li   x4, 55
-beq  x2, x4, 1
-j    fail
-li   x0, 0
-li   x7, 93
+li x7, 65
 sysc 0
-fail:
-li   x0, 1
-li   x7, 93
+addi x1, x0, 0
+li x2, 0
+li x3, 1
+li x4, 0
+loop:
+bne x1, x4, 1
+j output
+add x2, x3, x5
+addi x2, x3, 0
+addi x3, x5, 0
+addi x1, x1, 65535
+j loop
+output:
+addi x0, x2, 0
+li x7, 66
+sysc 0
+li x0, 0
+li x7, 93
 sysc 0
