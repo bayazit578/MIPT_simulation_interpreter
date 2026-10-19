@@ -85,9 +85,10 @@ public:
   };
 
 protected:
-  // Both execution modes operate on the same architectural state.
   CoreState *cpu;
   Memory    memory_;
+
+  std::unordered_map<Register, BasicBlock> cache_;
 
 private:
   std::size_t program_bytes_ = 0;
@@ -101,7 +102,6 @@ public:
 
 private:
   void executor (Instr instr);
-  std::unordered_map<Register, BasicBlock> cache_;
 
   void execute_clz (Instr instr);
   void execute_li  (Instr instr);
@@ -126,31 +126,23 @@ public:
   void execute_next_block() override;
 
 protected:
-  struct ThrdCell;
-  using Handler = void (ThrdExec::*)(Instr, const ThrdCell*, const ThrdCell*);
+  using Handler = void (ThrdExec::*)(Instr, const Instr*, const Instr*);
 
-  struct ThrdCell {
-    Instr instr;
-    Handler handler;
-  };
-
-  using ThrdBlock = std::vector<ThrdCell>;
-
-  void execute_clz (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_li  (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_sysc(Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_st  (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_stp (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_bne (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_beq (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_selc(Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_sti (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_j   (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_ssat(Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_ld  (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_sbit(Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_add (Instr instr, const ThrdCell *next, const ThrdCell *end);
-  void execute_addi(Instr instr, const ThrdCell *next, const ThrdCell *end);
+  void execute_clz (Instr instr, const Instr *next, const Instr *end);
+  void execute_li  (Instr instr, const Instr *next, const Instr *end);
+  void execute_sysc(Instr instr, const Instr *next, const Instr *end);
+  void execute_st  (Instr instr, const Instr *next, const Instr *end);
+  void execute_stp (Instr instr, const Instr *next, const Instr *end);
+  void execute_bne (Instr instr, const Instr *next, const Instr *end);
+  void execute_beq (Instr instr, const Instr *next, const Instr *end);
+  void execute_selc(Instr instr, const Instr *next, const Instr *end);
+  void execute_sti (Instr instr, const Instr *next, const Instr *end);
+  void execute_j   (Instr instr, const Instr *next, const Instr *end);
+  void execute_ssat(Instr instr, const Instr *next, const Instr *end);
+  void execute_ld  (Instr instr, const Instr *next, const Instr *end);
+  void execute_sbit(Instr instr, const Instr *next, const Instr *end);
+  void execute_add (Instr instr, const Instr *next, const Instr *end);
+  void execute_addi(Instr instr, const Instr *next, const Instr *end);
 
 private:
   static constexpr std::array<Handler, 15> handlers {

@@ -40,7 +40,7 @@ int Interpreter::load_program(std::string fname) {
   cpu_->reset();
   cpu_->load_instrs(instr_buf);
   terminated_ = false;
-  exit_code_ = 0;
+  exit_code_  = 0;
   return EXIT_SUCCESS;
 }
 

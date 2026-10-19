@@ -263,7 +263,7 @@ void BtCdExec::execute_addi(Instr instr) {
   INCR_PC;
 }
 
-void ThrdExec::execute_clz(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_clz(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t value = cpu->get_reg(instr.field2);
   std::uint32_t mask  = 1 << (kWordSize - 1);
   std::uint32_t i     = 0;
@@ -278,10 +278,10 @@ void ThrdExec::execute_clz(Instr instr, const ThrdCell* next, const ThrdCell* en
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_li(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_li(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend(instr.field3, bit_width);
   cpu->set_reg(instr.field1, (Register)extd_imm);
@@ -290,10 +290,10 @@ void ThrdExec::execute_li(Instr instr, const ThrdCell* next, const ThrdCell* end
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_sysc(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_sysc(Instr instr, const Instr* next, const Instr* end) {
   Syscall sysc;
   sysc.num = cpu->get_reg(kSyscNumReg);
 
@@ -305,7 +305,7 @@ void ThrdExec::execute_sysc(Instr instr, const ThrdCell* next, const ThrdCell* e
   throw sysc;
 }
 
-void ThrdExec::execute_st(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_st(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width);
 
@@ -316,10 +316,10 @@ void ThrdExec::execute_st(Instr instr, const ThrdCell* next, const ThrdCell* end
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_stp(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_stp(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t field4_mask = get_mask(FIELD4_WIDTH(instr.instr));
   Word          field4      = (instr.field3 >> FIELD3_WIDTH(instr.instr))
                             & field4_mask;
@@ -338,10 +338,10 @@ void ThrdExec::execute_stp(Instr instr, const ThrdCell* next, const ThrdCell* en
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_bne(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_bne(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
@@ -354,10 +354,10 @@ void ThrdExec::execute_bne(Instr instr, const ThrdCell* next, const ThrdCell* en
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_beq(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_beq(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
@@ -370,10 +370,10 @@ void ThrdExec::execute_beq(Instr instr, const ThrdCell* next, const ThrdCell* en
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_selc(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_selc(Instr instr, const Instr* next, const Instr* end) {
   Register rs1  = reg(instr.field2);
   Register rs2  = reg(instr.field3);
   bool     cond = rs1 > rs2;
@@ -385,10 +385,10 @@ void ThrdExec::execute_selc(Instr instr, const ThrdCell* next, const ThrdCell* e
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_sti(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_sti(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
 
@@ -400,19 +400,19 @@ void ThrdExec::execute_sti(Instr instr, const ThrdCell* next, const ThrdCell* en
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_j(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_j(Instr instr, const Instr* next, const Instr* end) {
   Register current_pc = pc();
   cpu->set_pc((current_pc & 0xF0000000) | (instr.field3 << 2));
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_ssat(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_ssat(Instr instr, const Instr* next, const Instr* end) {
   Register ssatred = sgn_sat(cpu->get_reg(instr.field1), instr.field3);
   cpu->set_reg(instr.field1, ssatred);
 
@@ -420,10 +420,10 @@ void ThrdExec::execute_ssat(Instr instr, const ThrdCell* next, const ThrdCell* e
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_ld(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_ld(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
 
@@ -435,10 +435,10 @@ void ThrdExec::execute_ld(Instr instr, const ThrdCell* next, const ThrdCell* end
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_sbit(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_sbit(Instr instr, const Instr* next, const Instr* end) {
   Register sbit = 1 << instr.field3;
   cpu->set_reg(instr.field1, sbit);
 
@@ -446,10 +446,10 @@ void ThrdExec::execute_sbit(Instr instr, const ThrdCell* next, const ThrdCell* e
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_add(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_add(Instr instr, const Instr* next, const Instr* end) {
   Register sum = cpu->get_reg(instr.field1) + cpu->get_reg(instr.field3);
   cpu->set_reg(instr.field2, sum);
 
@@ -457,10 +457,11 @@ void ThrdExec::execute_add(Instr instr, const ThrdCell* next, const ThrdCell* en
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void ThrdExec::execute_addi(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+void ThrdExec::execute_addi(Instr instr, const Instr* next, const Instr* end) {
   const std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   const SignedWord immediate = sgn_extend(instr.field3, bit_width);
   Register sum = cpu->get_reg(instr.field1) + immediate;
@@ -470,7 +471,8 @@ void ThrdExec::execute_addi(Instr instr, const ThrdCell* next, const ThrdCell* e
   if (next == end) {
     return;
   }
-  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+
+  THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
 void Cpu::reset() {
@@ -602,16 +604,16 @@ void BtCdExec::reset() {
 }
 
 void ThrdExec::execute_next_block() {
-  DecodedBlock decoded = decode_next_block();
-  ThrdBlock    block;
-  block.reserve(decoded.size());
+  Register start = pc();
+  auto     found = cache_.find(start);
 
-  for (const Instr& instr : decoded) {
-    const auto index = instr.instr;
-    block.push_back({instr, handlers[index]});
+  if (found == cache_.end()) {
+    found = cache_.emplace(start, decode_next_block()).first;
   }
 
-  const ThrdCell* first = block.data();
-  const ThrdCell* end   = first + block.size();
-  return (this->*(first->handler))(first->instr, first + 1, end);
+  const DecodedBlock& block = found->second;
+  const Instr*        first = block.data();
+  const Instr*        end   = first + block.size();
+
+  (this->*handlers[first->instr])(*first, first + 1, end);
 }
