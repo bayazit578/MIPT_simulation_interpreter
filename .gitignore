@@ -2,3 +2,7 @@ compile_commands.json
 interpreter
 .gdb_history
 build/
+.git/
+.cache/
+.ruby-lsp/
+perf.data

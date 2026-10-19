@@ -1,5 +1,13 @@
 #include "cpu.hpp"
 
+#if defined(__clang__)
+#define THRD_MUSTTAIL [[clang::musttail]]
+#elif defined(__GNUC__)
+#define THRD_MUSTTAIL [[gnu::musttail]]
+#else
+#define THRD_MUSTTAIL
+#endif
+
 #define GET_OPCODE(instr_code, instr)                     \
   Byte opcode{0};                                         \
   Byte mask6 = (Byte)get_mask(6);                         \
@@ -39,57 +47,69 @@
 
 #define INCR_PC cpu->set_pc(cpu->get_pc() + sizeof(Word))
 
-#define IS_CTRL(instr)          \
-    (instr.instr == kJ          \
-  || instr.instr == kBne        \
-  || instr.instr == kBeq        \
-  || instr.instr == kSysc)      \
+#define IS_CTRL(instr)     \
+    (instr.instr == kJ     \
+  || instr.instr == kBne   \
+  || instr.instr == kBeq   \
+  || instr.instr == kSysc) \
  
 
-static SignedWord    sgn_extend(Word value, Word bit_width);
+static Word          sgn_extend(Word value, Word bit_width);
 static std::uint32_t get_mask  (std::uint32_t mask_width);
-static Word          sgn_sat(Word reg, Word width);
+static Word          sgn_sat   (Word reg, Word width);
 
 
-static SignedWord sgn_extend(Word value, Word bit_width) {
+static Word sgn_extend(Word value, Word bit_width) {
   Word m = 1u << (bit_width - 1);
-  return std::bit_cast<SignedWord>((value ^ m) - m);
+  return std::bit_cast<Word>((value ^ m) - m);
 }
 
 static std::uint32_t get_mask(std::uint32_t mask_width) {
   return ((1 << mask_width) - 1);
 }
 
-static Word sgn_sat(Word reg, Word width) {
-  SignedWord lower_b = -(1 << (width-1));
-  SignedWord upper_b = (1 << (width-1)) - 1;
+static Word sgn_sat(Word value, Word width) {
+  if (width == 0 || width > kWordSize) {
+    throw std::out_of_range("ssat: invalid width");
+  }
 
-  SignedWord res = std::clamp<SignedWord>(
-    std::bit_cast<SignedWord>(reg), 
-    lower_b, 
-    upper_b
-  );
+  const Word magnitude = Word{1} << (width - 1);
+  const Word lower = Word{0} - magnitude;  // -2^(width-1) as bits
+  const Word upper = magnitude - 1;
+  const Word sign_bit = Word{1} << (kWordSize - 1);
 
-  return std::bit_cast<Word>(res);
+  if (value & sign_bit) {
+    return value < lower ? lower : value;
+  }
+  return value > upper ? upper : value;
 }
 
-
-Register Cpu::prefetch_basic_block(BasicBlock& blk) {
-  Register begin_pc = cpu->get_pc();
-  Instr instr{};
-
-  do {
-    instr = decoder(fetch_instr());
-    blk.push_back(instr);
-    INCR_PC;
-  } while (!IS_CTRL(instr));
-
-  cpu->set_pc(begin_pc);
-  return begin_pc;
+Register CoreState::get_reg(std::size_t spec) {
+  check_range(spec);
+  return gpr_regs[spec];
 }
 
+Register CoreState::get_pc() {
+  return pc;
+}
 
-void Cpu::execute_clz(Instr instr) {
+Cpu::DecodedBlock Cpu::decode_next_block() {
+  DecodedBlock block;
+  Register     address = pc();
+
+  while (true) {
+    Instr instr = decoder(fetch_instr(address));
+    block.push_back(instr);
+
+    address += sizeof(Word);
+
+    if (IS_CTRL(instr)) {
+      return block;
+    }
+  }
+}
+
+void BtCdExec::execute_clz(Instr instr) {
   std::uint32_t value = cpu->get_reg(instr.field2);
   std::uint32_t mask  = 1 << (kWordSize - 1);
   std::uint32_t i     = 0;
@@ -103,7 +123,7 @@ void Cpu::execute_clz(Instr instr) {
   INCR_PC;
 }
 
-void Cpu::execute_li(Instr instr) {
+void BtCdExec::execute_li(Instr instr) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend(instr.field3, bit_width);
   cpu->set_reg(instr.field1, (Register)extd_imm);
@@ -111,7 +131,7 @@ void Cpu::execute_li(Instr instr) {
   INCR_PC;
 }
 
-void Cpu::execute_sysc(Instr instr) {
+void BtCdExec::execute_sysc(Instr instr) {
   Syscall sysc;
   sysc.num = cpu->get_reg(kSyscNumReg);
 
@@ -123,7 +143,7 @@ void Cpu::execute_sysc(Instr instr) {
   throw sysc;
 }
 
-void Cpu::execute_st(Instr instr) {
+void BtCdExec::execute_st(Instr instr) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width);
 
@@ -133,7 +153,7 @@ void Cpu::execute_st(Instr instr) {
   INCR_PC;
 }
 
-void Cpu::execute_stp(Instr instr) {
+void BtCdExec::execute_stp(Instr instr) {
   std::uint32_t field4_mask = get_mask(FIELD4_WIDTH(instr.instr));
   Word          field4      = (instr.field3 >> FIELD3_WIDTH(instr.instr)) 
                             & field4_mask;
@@ -151,7 +171,7 @@ void Cpu::execute_stp(Instr instr) {
   INCR_PC;
 }
 
-void Cpu::execute_bne(Instr instr) {
+void BtCdExec::execute_bne(Instr instr) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
@@ -163,7 +183,7 @@ void Cpu::execute_bne(Instr instr) {
                    : pc_prev + sizeof(Word));
 }
 
-void Cpu::execute_beq(Instr instr) {
+void BtCdExec::execute_beq(Instr instr) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
@@ -175,9 +195,9 @@ void Cpu::execute_beq(Instr instr) {
                    : pc_prev + sizeof(Word));
 }
 
-void Cpu::execute_selc(Instr instr) {
-  Register rs1  = cpu->get_reg(instr.field2);
-  Register rs2  = cpu->get_reg(instr.field3);
+void BtCdExec::execute_selc(Instr instr) {
+  Register rs1  = reg(instr.field2);
+  Register rs2  = reg(instr.field3);
   bool     cond = rs1 > rs2;
 
   Register result = cond ? rs1 : rs2;
@@ -186,30 +206,30 @@ void Cpu::execute_selc(Instr instr) {
   INCR_PC;
 }
 
-void Cpu::execute_sti(Instr instr) {
+void BtCdExec::execute_sti(Instr instr) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
 
-  std::size_t addr = cpu->get_reg(instr.field1) + extd_offset;
-  memory_.store(addr, cpu->get_reg(instr.field2));
+  std::size_t addr = reg(instr.field1) + extd_offset;
+  memory_.store(addr, reg(instr.field2));
   cpu->set_reg(instr.field1, addr);
 
   INCR_PC;
 }
 
-void Cpu::execute_j(Instr instr) {
-  Register pc = cpu->get_pc();
-  cpu->set_pc((pc & 0xF0000000) | (instr.field3 << 2));
+void BtCdExec::execute_j(Instr instr) {
+  Register current_pc = pc();
+  cpu->set_pc((current_pc & 0xF0000000) | (instr.field3 << 2));
 }
 
-void Cpu::execute_ssat(Instr instr) {
+void BtCdExec::execute_ssat(Instr instr) {
   Register ssatred = sgn_sat(cpu->get_reg(instr.field1), instr.field3);
   cpu->set_reg(instr.field1, ssatred);
 
   INCR_PC;
 }
 
-void Cpu::execute_ld(Instr instr) {
+void BtCdExec::execute_ld(Instr instr) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
 
@@ -220,21 +240,21 @@ void Cpu::execute_ld(Instr instr) {
   INCR_PC;
 }
 
-void Cpu::execute_sbit(Instr instr) {
+void BtCdExec::execute_sbit(Instr instr) {
   Register sbit = 1 << instr.field3;
   cpu->set_reg(instr.field1, sbit);
 
   INCR_PC;
 }
 
-void Cpu::execute_add(Instr instr) {
+void BtCdExec::execute_add(Instr instr) {
   Register sum = cpu->get_reg(instr.field1) + cpu->get_reg(instr.field3);
   cpu->set_reg(instr.field2, sum);
 
   INCR_PC;
 }
 
-void Cpu::execute_addi(Instr instr) {
+void BtCdExec::execute_addi(Instr instr) {
   const std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   const SignedWord immediate = sgn_extend(instr.field3, bit_width);
   Register sum = cpu->get_reg(instr.field1) + immediate;
@@ -243,12 +263,233 @@ void Cpu::execute_addi(Instr instr) {
   INCR_PC;
 }
 
-void Cpu::load_instrs(std::vector<Word> &instrs) {
-  memory_.load_instrs(0, instrs);
+void ThrdExec::execute_clz(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  std::uint32_t value = cpu->get_reg(instr.field2);
+  std::uint32_t mask  = 1 << (kWordSize - 1);
+  std::uint32_t i     = 0;
+
+  for (; i < kWordSize && (value & mask) == 0; i++) {
+    value <<= 1;
+  }
+
+  cpu->set_reg(instr.field1, i);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
 }
 
-Word Cpu::fetch_instr() {
-  return memory_.load<Word>(cpu->get_pc());
+void ThrdExec::execute_li(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
+  SignedWord    extd_imm  = sgn_extend(instr.field3, bit_width);
+  cpu->set_reg(instr.field1, (Register)extd_imm);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_sysc(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  Syscall sysc;
+  sysc.num = cpu->get_reg(kSyscNumReg);
+
+  for (std::uint8_t i = 0; i < kSyscArgNum; i++) {
+    sysc.args[i] = cpu->get_reg(i);
+  }
+
+  INCR_PC;
+  throw sysc;
+}
+
+void ThrdExec::execute_st(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
+  SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width);
+
+  std::size_t addr = cpu->get_reg(instr.field1) + extd_imm;
+  memory_.store<Word>(addr, cpu->get_reg(instr.field2));
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_stp(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  std::uint32_t field4_mask = get_mask(FIELD4_WIDTH(instr.instr));
+  Word          field4      = (instr.field3 >> FIELD3_WIDTH(instr.instr))
+                            & field4_mask;
+
+  std::uint32_t field3_mask = get_mask(FIELD3_WIDTH(instr.instr));
+  Word          field3      = instr.field3 & field3_mask;
+
+  std::uint32_t bit_width = FIELD4_WIDTH(instr.instr);
+  SignedWord    extd_imm  = sgn_extend  (field4, bit_width);
+
+  std::size_t addr = cpu->get_reg(instr.field1) + extd_imm;
+  memory_.store<Word>(addr    , cpu->get_reg(instr.field2));
+  memory_.store<Word>(addr + 4, cpu->get_reg(field3));
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_bne(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
+  SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
+  Word          target      = extd_offset << 2;
+
+  bool cond = cpu->get_reg(instr.field1) != cpu->get_reg(instr.field2);
+
+  Word pc_prev = cpu->get_pc();
+  cpu->set_pc(cond ? pc_prev + sizeof(Word) + target
+                   : pc_prev + sizeof(Word));
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_beq(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
+  SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
+  Word          target      = extd_offset << 2;
+
+  bool cond = cpu->get_reg(instr.field1) == cpu->get_reg(instr.field2);
+
+  Word pc_prev = cpu->get_pc();
+  cpu->set_pc(cond ? pc_prev + sizeof(Word) + target
+                   : pc_prev + sizeof(Word));
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_selc(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  Register rs1  = reg(instr.field2);
+  Register rs2  = reg(instr.field3);
+  bool     cond = rs1 > rs2;
+
+  Register result = cond ? rs1 : rs2;
+  cpu->set_reg(instr.field1, result);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_sti(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
+  SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
+
+  std::size_t addr = reg(instr.field1) + extd_offset;
+  memory_.store(addr, reg(instr.field2));
+  cpu->set_reg(instr.field1, addr);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_j(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  Register current_pc = pc();
+  cpu->set_pc((current_pc & 0xF0000000) | (instr.field3 << 2));
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_ssat(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  Register ssatred = sgn_sat(cpu->get_reg(instr.field1), instr.field3);
+  cpu->set_reg(instr.field1, ssatred);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_ld(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
+  SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
+
+  std::size_t addr = cpu->get_reg(instr.field1) + extd_offset;
+  Word        val  = memory_.load<Word>(addr);
+  cpu->set_reg(instr.field2, val);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_sbit(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  Register sbit = 1 << instr.field3;
+  cpu->set_reg(instr.field1, sbit);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_add(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  Register sum = cpu->get_reg(instr.field1) + cpu->get_reg(instr.field3);
+  cpu->set_reg(instr.field2, sum);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void ThrdExec::execute_addi(Instr instr, const ThrdCell* next, const ThrdCell* end) {
+  const std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
+  const SignedWord immediate = sgn_extend(instr.field3, bit_width);
+  Register sum = cpu->get_reg(instr.field1) + immediate;
+  cpu->set_reg(instr.field2, sum);
+
+  INCR_PC;
+  if (next == end) {
+    return;
+  }
+  THRD_MUSTTAIL return (this->*(next->handler))(next->instr, next + 1, end);
+}
+
+void Cpu::reset() {
+  *cpu = CoreState{};
+  memory_ = Memory{};
+  program_bytes_ = 0;
+}
+
+void Cpu::load_instrs(std::vector<Word> &instrs) {
+  memory_.load_instrs(0, instrs);
+  program_bytes_ = instrs.size() * sizeof(Word);
+}
+
+Word Cpu::fetch_instr(size_t address) {
+  if (address % sizeof(Word) != 0 || address > program_bytes_
+      || sizeof(Word) > program_bytes_ - address) {
+    throw std::out_of_range("cpu: instruction address is out of range");
+  }
+  return memory_.load<Word>(address);
 }
 
 Instr Cpu::decoder(Word instr_code) {
@@ -326,16 +567,6 @@ void BtCdExec::executor(Instr instr) {
   }
 }
 
-Register CoreState::get_reg(std::size_t spec) {
-  check_range(spec);
-
-  return gpr_regs[spec];
-}
-
-Register CoreState::get_pc() {
-  return pc;
-}
-
 void CoreState::set_reg(std::size_t spec, Register val) {
   check_range(spec);
 
@@ -352,33 +583,35 @@ void CoreState::check_range(std::size_t spec) {
   }
 }
 
-void BtCdExec::execute_block(BasicBlock &blk) {
-  for(auto& instr : blk) {
+void BtCdExec::execute_next_block() {
+  Register start = pc();
+  auto     found = cache_.find(start);
+
+  if (found == cache_.end()) {
+    found = cache_.emplace(start, decode_next_block()).first;
+  }
+
+  for (const Instr &instr : found->second) {
     executor(instr);
   }
 }
 
-void ThrdCdExec::execute_block(BasicBlock &blk) {
-  
+void BtCdExec::reset() {
+  Cpu::reset();
+  cache_.clear();
 }
 
-ThrdCdExec::Handler ThrdCdExec::handler(InstrNumb instr) {
-  switch (instr) {
-    case kClz  : return &ThrdCdExec::execute_clz;
-    case kLi   : return &ThrdCdExec::execute_li;
-    case kSysc : return &ThrdCdExec::execute_sysc;
-    case kSt   : return &ThrdCdExec::execute_st;
-    case kStp  : return &ThrdCdExec::execute_stp;
-    case kBne  : return &ThrdCdExec::execute_bne;
-    case kBeq  : return &ThrdCdExec::execute_beq;
-    case kSelc : return &ThrdCdExec::execute_selc;
-    case kSti  : return &ThrdCdExec::execute_sti;
-    case kJ    : return &ThrdCdExec::execute_j;
-    case kSsat : return &ThrdCdExec::execute_ssat;
-    case kLd   : return &ThrdCdExec::execute_ld;
-    case kSbit : return &ThrdCdExec::execute_sbit;
-    case kAdd  : return &ThrdCdExec::execute_add;
-    case kAddi : return &ThrdCdExec::execute_addi;
+void ThrdExec::execute_next_block() {
+  DecodedBlock decoded = decode_next_block();
+  ThrdBlock    block;
+  block.reserve(decoded.size());
 
+  for (const Instr& instr : decoded) {
+    const auto index = instr.instr;
+    block.push_back({instr, handlers[index]});
   }
+
+  const ThrdCell* first = block.data();
+  const ThrdCell* end   = first + block.size();
+  return (this->*(first->handler))(first->instr, first + 1, end);
 }

@@ -1,5 +1,11 @@
 #include "interpreter.hpp"
 
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <vector>
+
 int Interpreter::load_program(std::string fname) {
   std::ifstream file(fname, std::ios::binary | std::ios::ate);
   if (!file) {
@@ -31,27 +37,19 @@ int Interpreter::load_program(std::string fname) {
     return EXIT_FAILURE;
   }
 
-  cpu_.load_instrs(instr_buf);
+  cpu_->reset();
+  cpu_->load_instrs(instr_buf);
+  terminated_ = false;
+  exit_code_ = 0;
   return EXIT_SUCCESS;
 }
 
 void Interpreter::iter() {
   try {
-    auto cache_it = cache_.find(cpu_.pc());
-
-    if (cache_it != cache_.end()) {
-        cpu_.execute_block(cache_it->second);
-        return;
-    }
-
-    Cpu::BasicBlock blk;
-
-    Register begin_pc = cpu_.prefetch_basic_block(blk);
-    cache_[begin_pc] = blk;
-    cpu_.execute_block(blk);
+    cpu_->execute_next_block();
   }
 
-  catch (const Syscall &sysc) {
+  catch (const Cpu::Syscall &sysc) {
     switch (sysc.num) {
       case kExit : 
         exit_code_  = sysc.args[0];
