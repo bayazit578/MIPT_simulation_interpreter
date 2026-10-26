@@ -7,45 +7,40 @@
 #include <vector>
 #include <unistd.h>
 
-int Interpreter::load_program(std::string fname) {
-  std::ifstream file(fname, std::ios::binary | std::ios::ate);
-  if (!file) {
-    std::cerr << "interpreter: could not open file\n";
+#include "elf_ext.hpp"
+
+int Interpreter::load_program(const std::string fname) {
+  try {
+    ElfReader reader;
+    reader.load_program(fname);
+    auto segments = reader.load_segments();
+
+    if (reader.entry() != 0 || segments.size() != 1) {
+      throw std::runtime_error("unsupported ELF layout");
+    }
+
+    const Segment& text = segments.front();
+    if (text.addr != 0 ||
+        !(text.flags & ELFIO::PF_X) ||
+        text.data.empty() ||
+        text.data.size() % sizeof(Word) != 0 ||
+        text.memory_size > kMemorySize) {
+      throw std::runtime_error("invalid text segment");
+    }
+
+    std::vector<Word> instructions(text.data.size() / sizeof(Word));
+    std::memcpy(instructions.data(), text.data.data(), text.data.size());
+
+    cpu_->reset();
+    cpu_->load_instrs(instructions);
+    terminated_ = false;
+    exit_code_ = 0;
+    return EXIT_SUCCESS;
+  } catch (const std::exception& error) {
+    std::cerr << "interpreter: " << error.what() << '\n';
     return EXIT_FAILURE;
   }
-
-  const std::streamoff byte_count = file.tellg();
-  if (byte_count < 0 
-   || byte_count > kMemorySize
-   || byte_count % sizeof(Word) != 0) {
-    std::cerr << "interpreter: invalid program size\n";
-    return EXIT_FAILURE;
-  }
-
-  const std::size_t word_count =
-      static_cast<std::size_t>(byte_count) / sizeof(Word);
-  std::vector<Word> instr_buf(word_count);
-
-  if (!file.seekg(0, std::ios::beg)) {
-    std::cerr << "interpreter: could not seek to file start\n";
-    return EXIT_FAILURE;
-  }
-
-  if (byte_count > 0 &&
-      !file.read(reinterpret_cast<char*>(instr_buf.data()),
-                 static_cast<std::streamsize>(byte_count))) {
-    std::cerr << "interpreter: could not read file\n";
-    return EXIT_FAILURE;
-  }
-
-  cpu_->reset();
-  cpu_->load_instrs(instr_buf);
-  terminated_ = false;
-  exit_code_  = 0;
-  return EXIT_SUCCESS;
-}
-
-void Interpreter::iter() {
+}void Interpreter::iter() {
   try {
     cpu_->execute_next_block();
   }

@@ -19,7 +19,7 @@ public:
   {
   }
 
-  int load_program(std::string fname);
+  int load_program(const std::string fname);
   void iter();
 
   bool terminated() const {

@@ -1,3 +1,5 @@
+require_relative "src/bindings"
+
 INSTR_INFO = {
   clz: {
     opcode: { code: 0b100011, offset: 0x00 },
@@ -259,3 +261,10 @@ begin
 ensure
   asm.close
 end
+
+output = ARGV.fetch(1)
+code = File.binread(output)
+
+writer = ElfWriter.new
+writer.add_text(code, 0)
+writer.save(output)
