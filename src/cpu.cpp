@@ -1,5 +1,7 @@
 #include "cpu.hpp"
 
+#include "bit_ops.hpp"
+
 #if defined(__clang__)
 #define THRD_MUSTTAIL [[clang::musttail]]
 #elif defined(__GNUC__)
@@ -18,14 +20,6 @@
   }                                                       \
   instr.opc = (Opcode)opcode;
 
-#define FIELD1_OFFSET(instr_numb) oper_info[instr_numb].field1.offset
-#define FIELD2_OFFSET(instr_numb) oper_info[instr_numb].field2.offset
-#define FIELD3_OFFSET(instr_numb) oper_info[instr_numb].field3.offset
-#define FIELD4_OFFSET(instr_numb) oper_info[instr_numb].field4.offset
-#define FIELD1_WIDTH(instr_numb)  oper_info[instr_numb].field1.width
-#define FIELD2_WIDTH(instr_numb)  oper_info[instr_numb].field2.width
-#define FIELD3_WIDTH(instr_numb)  oper_info[instr_numb].field3.width
-#define FIELD4_WIDTH(instr_numb)  oper_info[instr_numb].field4.width
 
 #define GET_ALL_FIELDS(instr_numb) {                                      \
   std::uint32_t mask_field1 = get_mask(FIELD1_WIDTH(instr_numb));         \
@@ -53,36 +47,6 @@
   || instr.instr == kBeq   \
   || instr.instr == kSysc) \
  
-
-static Word          sgn_extend(Word value, Word bit_width);
-static std::uint32_t get_mask  (std::uint32_t mask_width);
-static Word          sgn_sat   (Word reg, Word width);
-
-
-static Word sgn_extend(Word value, Word bit_width) {
-  Word m = 1u << (bit_width - 1);
-  return std::bit_cast<Word>((value ^ m) - m);
-}
-
-static std::uint32_t get_mask(std::uint32_t mask_width) {
-  return ((1 << mask_width) - 1);
-}
-
-static Word sgn_sat(Word value, Word width) {
-  if (width == 0 || width > kWordSize) {
-    throw std::out_of_range("ssat: invalid width");
-  }
-
-  const Word magnitude = Word{1} << (width - 1);
-  const Word lower = Word{0} - magnitude;
-  const Word upper = magnitude - 1;
-  const Word sign_bit = Word{1} << (kWordSize - 1);
-
-  if (value & sign_bit) {
-    return value < lower ? lower : value;
-  }
-  return value > upper ? upper : value;
-}
 
 Register CoreState::get_reg(std::size_t spec) {
   check_range(spec);
@@ -178,7 +142,7 @@ void BtCdExec::execute_stp(Instr instr) {
   Word          field3      = instr.field3 & field3_mask;
 
   std::uint32_t bit_width = FIELD4_WIDTH(instr.instr);
-  SignedWord    extd_imm  = sgn_extend  (field4, bit_width);
+  Word          extd_imm  = sgn_extend  (field4, bit_width);
 
   std::size_t addr = cpu_->get_reg(instr.field1) + extd_imm;
   memory_.store<Word>(addr    , cpu_->get_reg(instr.field2));
