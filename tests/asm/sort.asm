@@ -1,4 +1,7 @@
 li x0, 0
+li x9, 32767
+add x9, x9, x9
+repeat_sort:
 li x1, 512
 li x2, 9
 st x2, [x1, 0]
@@ -28,6 +31,9 @@ j compare_pair
 addi x3, x3, 65535
 beq x3, x0, 1
 j next_pass
+addi x9, x9, 65535
+beq x9, x0, 1
+j repeat_sort
 li x1, 512
 ld x6, [x1, 0]
 li x7, 1

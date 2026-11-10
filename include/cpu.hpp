@@ -6,8 +6,8 @@
 #include <cstddef>
 #include <vector>
 #include <iostream>
-#include <queue>
 #include <unordered_map>
+#include <stdexcept>
 
 #include "memory.hpp"
 #include "isa.hpp"
@@ -36,6 +36,9 @@ public:
   void     set_reg(std::size_t spec, Register val);
   void     set_pc (Register val);
 
+  static std::size_t reg_offset(std::size_t index);
+  static std::size_t pc_offset ();
+
 private:
   Register gpr_regs[kNumRegs];
   Register pc;
@@ -44,44 +47,42 @@ private:
 };
 
 
-class Cpu {
+class Executor {
 public:
-  Cpu()
+  Executor()
     : memory_{}
   {
-    cpu = new CoreState{};
+    cpu_ = new CoreState{};
   }
 
-  virtual ~Cpu() {
-    delete cpu;
+  virtual ~Executor() {
+    delete cpu_;
   }
 
-  Cpu(const Cpu&) = delete;
-  Cpu& operator=(const Cpu&) = delete;
+  Executor(const Executor&) = delete;
+  Executor& operator=(const Executor&) = delete;
 
-  using DecodedBlock = std::vector<Instr>;
+  using BasicBlock = std::vector<Instr>;
 
   virtual void reset();
   virtual void execute_next_block() = 0;
-  DecodedBlock decode_next_block();
+  BasicBlock   decode_next_block();
   
   Register pc () {
-    return cpu->get_pc();
+    return cpu_->get_pc();
   }
 
   Register reg(std::size_t spec) {
-    return cpu->get_reg(spec);
+    return cpu_->get_reg(spec);
   }
 
   void set_syscall_result(Register value) {
-    cpu->set_reg(0, value);
+    cpu_->set_reg(0, value);
   }
 
   void  load_instrs(std::vector<Word> &instrs);
   Word  fetch_instr(size_t address);
   Instr decoder    (Word inst_code);
-
-  using BasicBlock = std::vector<Instr>;
 
   struct Syscall {
     Register num;
@@ -93,7 +94,7 @@ public:
   }
 
 protected:
-  CoreState *cpu;
+  CoreState *cpu_;
   Memory    memory_;
 
   std::unordered_map<Register, BasicBlock> cache_;
@@ -103,14 +104,15 @@ private:
 };
 
 
-class BtCdExec : public Cpu {
+class BtCdExec : public Executor {
 public:
   void reset() override;
   void execute_next_block() override;
 
-private:
+protected:
   void executor (Instr instr);
 
+private:
   void execute_clz (Instr instr);
   void execute_li  (Instr instr);
   void execute_sysc(Instr instr);
@@ -129,7 +131,7 @@ private:
 };
 
 
-class ThrdExec : public Cpu {
+class ThrdExec : public Executor {
 public:
   void execute_next_block() override;
 

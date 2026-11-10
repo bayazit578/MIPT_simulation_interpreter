@@ -1,5 +1,7 @@
 #include "cpu.hpp"
 
+#include "bit_ops.hpp"
+
 #if defined(__clang__)
 #define THRD_MUSTTAIL [[clang::musttail]]
 #elif defined(__GNUC__)
@@ -18,14 +20,6 @@
   }                                                       \
   instr.opc = (Opcode)opcode;
 
-#define FIELD1_OFFSET(instr_numb) oper_info[instr_numb].field1.offset
-#define FIELD2_OFFSET(instr_numb) oper_info[instr_numb].field2.offset
-#define FIELD3_OFFSET(instr_numb) oper_info[instr_numb].field3.offset
-#define FIELD4_OFFSET(instr_numb) oper_info[instr_numb].field4.offset
-#define FIELD1_WIDTH(instr_numb)  oper_info[instr_numb].field1.width
-#define FIELD2_WIDTH(instr_numb)  oper_info[instr_numb].field2.width
-#define FIELD3_WIDTH(instr_numb)  oper_info[instr_numb].field3.width
-#define FIELD4_WIDTH(instr_numb)  oper_info[instr_numb].field4.width
 
 #define GET_ALL_FIELDS(instr_numb) {                                      \
   std::uint32_t mask_field1 = get_mask(FIELD1_WIDTH(instr_numb));         \
@@ -45,7 +39,7 @@
   break;                                                                  \
 }
 
-#define INCR_PC cpu->set_pc(cpu->get_pc() + sizeof(Word))
+#define INCR_PC cpu_->set_pc(cpu_->get_pc() + sizeof(Word))
 
 #define IS_CTRL(instr)     \
     (instr.instr == kJ     \
@@ -53,36 +47,6 @@
   || instr.instr == kBeq   \
   || instr.instr == kSysc) \
  
-
-static Word          sgn_extend(Word value, Word bit_width);
-static std::uint32_t get_mask  (std::uint32_t mask_width);
-static Word          sgn_sat   (Word reg, Word width);
-
-
-static Word sgn_extend(Word value, Word bit_width) {
-  Word m = 1u << (bit_width - 1);
-  return std::bit_cast<Word>((value ^ m) - m);
-}
-
-static std::uint32_t get_mask(std::uint32_t mask_width) {
-  return ((1 << mask_width) - 1);
-}
-
-static Word sgn_sat(Word value, Word width) {
-  if (width == 0 || width > kWordSize) {
-    throw std::out_of_range("ssat: invalid width");
-  }
-
-  const Word magnitude = Word{1} << (width - 1);
-  const Word lower = Word{0} - magnitude;  // -2^(width-1) as bits
-  const Word upper = magnitude - 1;
-  const Word sign_bit = Word{1} << (kWordSize - 1);
-
-  if (value & sign_bit) {
-    return value < lower ? lower : value;
-  }
-  return value > upper ? upper : value;
-}
 
 Register CoreState::get_reg(std::size_t spec) {
   check_range(spec);
@@ -93,9 +57,25 @@ Register CoreState::get_pc() {
   return pc;
 }
 
-Cpu::DecodedBlock Cpu::decode_next_block() {
-  DecodedBlock block;
-  Register     address = pc();
+std::size_t CoreState::reg_offset(std::size_t index) {
+  if (index >= kNumRegs) {
+    throw std::runtime_error("cpu: invalid register");
+  }
+
+  return static_cast<std::size_t>(
+    offsetof(CoreState, gpr_regs) + index * sizeof(Register)
+  );
+}
+
+std::size_t CoreState::pc_offset() {
+  return static_cast<std::size_t>(
+    offsetof(CoreState, pc)
+  );
+}
+
+Executor::BasicBlock Executor::decode_next_block() {
+  BasicBlock block;
+  Register   address = pc();
 
   while (true) {
     Instr instr = decoder(fetch_instr(address));
@@ -110,7 +90,7 @@ Cpu::DecodedBlock Cpu::decode_next_block() {
 }
 
 void BtCdExec::execute_clz(Instr instr) {
-  std::uint32_t value = cpu->get_reg(instr.field2);
+  std::uint32_t value = cpu_->get_reg(instr.field2);
   std::uint32_t mask  = 1 << (kWordSize - 1);
   std::uint32_t i     = 0;
 
@@ -118,7 +98,7 @@ void BtCdExec::execute_clz(Instr instr) {
     value <<= 1;
   }
 
-  cpu->set_reg(instr.field1, i);
+  cpu_->set_reg(instr.field1, i);
 
   INCR_PC;
 }
@@ -126,17 +106,17 @@ void BtCdExec::execute_clz(Instr instr) {
 void BtCdExec::execute_li(Instr instr) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend(instr.field3, bit_width);
-  cpu->set_reg(instr.field1, (Register)extd_imm);
+  cpu_->set_reg(instr.field1, (Register)extd_imm);
 
   INCR_PC;
 }
 
 void BtCdExec::execute_sysc(Instr instr) {
   Syscall sysc;
-  sysc.num = cpu->get_reg(kSyscNumReg);
+  sysc.num = cpu_->get_reg(kSyscNumReg);
 
   for (std::uint8_t i = 0; i < kSyscArgNum; i++) {
-    sysc.args[i] = cpu->get_reg(i);
+    sysc.args[i] = cpu_->get_reg(i);
   }
 
   INCR_PC;
@@ -147,8 +127,8 @@ void BtCdExec::execute_st(Instr instr) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width);
 
-  std::size_t addr = cpu->get_reg(instr.field1) + extd_imm;
-  memory_.store<Word>(addr, cpu->get_reg(instr.field2));
+  std::size_t addr = cpu_->get_reg(instr.field1) + extd_imm;
+  memory_.store<Word>(addr, cpu_->get_reg(instr.field2));
 
   INCR_PC;
 }
@@ -162,11 +142,11 @@ void BtCdExec::execute_stp(Instr instr) {
   Word          field3      = instr.field3 & field3_mask;
 
   std::uint32_t bit_width = FIELD4_WIDTH(instr.instr);
-  SignedWord    extd_imm  = sgn_extend  (field4, bit_width);
+  Word          extd_imm  = sgn_extend  (field4, bit_width);
 
-  std::size_t addr = cpu->get_reg(instr.field1) + extd_imm;
-  memory_.store<Word>(addr    , cpu->get_reg(instr.field2));
-  memory_.store<Word>(addr + 4, cpu->get_reg(field3));
+  std::size_t addr = cpu_->get_reg(instr.field1) + extd_imm;
+  memory_.store<Word>(addr    , cpu_->get_reg(instr.field2));
+  memory_.store<Word>(addr + 4, cpu_->get_reg(field3));
 
   INCR_PC;
 }
@@ -176,11 +156,11 @@ void BtCdExec::execute_bne(Instr instr) {
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
 
-  bool cond = cpu->get_reg(instr.field1) != cpu->get_reg(instr.field2);
+  bool cond = cpu_->get_reg(instr.field1) != cpu_->get_reg(instr.field2);
 
-  Word pc_prev = cpu->get_pc();
-  cpu->set_pc(cond ? pc_prev + sizeof(Word) + target
-                   : pc_prev + sizeof(Word));
+  Word pc_prev = cpu_->get_pc();
+  cpu_->set_pc(cond ? pc_prev + sizeof(Word) + target
+                    : pc_prev + sizeof(Word));
 }
 
 void BtCdExec::execute_beq(Instr instr) {
@@ -188,11 +168,11 @@ void BtCdExec::execute_beq(Instr instr) {
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
 
-  bool cond = cpu->get_reg(instr.field1) == cpu->get_reg(instr.field2);
+  bool cond = cpu_->get_reg(instr.field1) == cpu_->get_reg(instr.field2);
 
-  Word pc_prev = cpu->get_pc();
-  cpu->set_pc(cond ? pc_prev + sizeof(Word) + target
-                   : pc_prev + sizeof(Word));
+  Word pc_prev = cpu_->get_pc();
+  cpu_->set_pc(cond ? pc_prev + sizeof(Word) + target
+                    : pc_prev + sizeof(Word));
 }
 
 void BtCdExec::execute_selc(Instr instr) {
@@ -201,7 +181,7 @@ void BtCdExec::execute_selc(Instr instr) {
   bool     cond = rs1 > rs2;
 
   Register result = cond ? rs1 : rs2;
-  cpu->set_reg(instr.field1, result);
+  cpu_->set_reg(instr.field1, result);
 
   INCR_PC;
 }
@@ -212,19 +192,19 @@ void BtCdExec::execute_sti(Instr instr) {
 
   std::size_t addr = reg(instr.field1) + extd_offset;
   memory_.store(addr, reg(instr.field2));
-  cpu->set_reg(instr.field1, addr);
+  cpu_->set_reg(instr.field1, addr);
 
   INCR_PC;
 }
 
 void BtCdExec::execute_j(Instr instr) {
   Register current_pc = pc();
-  cpu->set_pc((current_pc & 0xF0000000) | (instr.field3 << 2));
+  cpu_->set_pc((current_pc & 0xF0000000) | (instr.field3 << 2));
 }
 
 void BtCdExec::execute_ssat(Instr instr) {
-  Register ssatred = sgn_sat(cpu->get_reg(instr.field1), instr.field3);
-  cpu->set_reg(instr.field1, ssatred);
+  Register ssatred = sgn_sat(cpu_->get_reg(instr.field1), instr.field3);
+  cpu_->set_reg(instr.field1, ssatred);
 
   INCR_PC;
 }
@@ -233,23 +213,23 @@ void BtCdExec::execute_ld(Instr instr) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
 
-  std::size_t addr = cpu->get_reg(instr.field1) + extd_offset;
+  std::size_t addr = cpu_->get_reg(instr.field1) + extd_offset;
   Word        val  = memory_.load<Word>(addr);
-  cpu->set_reg(instr.field2, val);
+  cpu_->set_reg(instr.field2, val);
 
   INCR_PC;
 }
 
 void BtCdExec::execute_sbit(Instr instr) {
   Register sbit = 1 << instr.field3;
-  cpu->set_reg(instr.field1, sbit);
+  cpu_->set_reg(instr.field1, sbit);
 
   INCR_PC;
 }
 
 void BtCdExec::execute_add(Instr instr) {
-  Register sum = cpu->get_reg(instr.field2) + cpu->get_reg(instr.field3);
-  cpu->set_reg(instr.field1, sum);
+  Register sum = cpu_->get_reg(instr.field2) + cpu_->get_reg(instr.field3);
+  cpu_->set_reg(instr.field1, sum);
 
   INCR_PC;
 }
@@ -257,14 +237,14 @@ void BtCdExec::execute_add(Instr instr) {
 void BtCdExec::execute_addi(Instr instr) {
   const std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   const SignedWord immediate = sgn_extend(instr.field3, bit_width);
-  Register sum = cpu->get_reg(instr.field1) + immediate;
-  cpu->set_reg(instr.field2, sum);
+  Register sum = cpu_->get_reg(instr.field1) + immediate;
+  cpu_->set_reg(instr.field2, sum);
 
   INCR_PC;
 }
 
 void ThrdExec::execute_clz(Instr instr, const Instr* next, const Instr* end) {
-  std::uint32_t value = cpu->get_reg(instr.field2);
+  std::uint32_t value = cpu_->get_reg(instr.field2);
   std::uint32_t mask  = 1 << (kWordSize - 1);
   std::uint32_t i     = 0;
 
@@ -272,7 +252,7 @@ void ThrdExec::execute_clz(Instr instr, const Instr* next, const Instr* end) {
     value <<= 1;
   }
 
-  cpu->set_reg(instr.field1, i);
+  cpu_->set_reg(instr.field1, i);
 
   INCR_PC;
   if (next == end) {
@@ -284,7 +264,7 @@ void ThrdExec::execute_clz(Instr instr, const Instr* next, const Instr* end) {
 void ThrdExec::execute_li(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend(instr.field3, bit_width);
-  cpu->set_reg(instr.field1, (Register)extd_imm);
+  cpu_->set_reg(instr.field1, (Register)extd_imm);
 
   INCR_PC;
   if (next == end) {
@@ -295,10 +275,10 @@ void ThrdExec::execute_li(Instr instr, const Instr* next, const Instr* end) {
 
 void ThrdExec::execute_sysc(Instr instr, const Instr* next, const Instr* end) {
   Syscall sysc;
-  sysc.num = cpu->get_reg(kSyscNumReg);
+  sysc.num = cpu_->get_reg(kSyscNumReg);
 
   for (std::uint8_t i = 0; i < kSyscArgNum; i++) {
-    sysc.args[i] = cpu->get_reg(i);
+    sysc.args[i] = cpu_->get_reg(i);
   }
 
   INCR_PC;
@@ -309,8 +289,8 @@ void ThrdExec::execute_st(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend  (instr.field3, bit_width);
 
-  std::size_t addr = cpu->get_reg(instr.field1) + extd_imm;
-  memory_.store<Word>(addr, cpu->get_reg(instr.field2));
+  std::size_t addr = cpu_->get_reg(instr.field1) + extd_imm;
+  memory_.store<Word>(addr, cpu_->get_reg(instr.field2));
 
   INCR_PC;
   if (next == end) {
@@ -330,9 +310,9 @@ void ThrdExec::execute_stp(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width = FIELD4_WIDTH(instr.instr);
   SignedWord    extd_imm  = sgn_extend  (field4, bit_width);
 
-  std::size_t addr = cpu->get_reg(instr.field1) + extd_imm;
-  memory_.store<Word>(addr    , cpu->get_reg(instr.field2));
-  memory_.store<Word>(addr + 4, cpu->get_reg(field3));
+  std::size_t addr = cpu_->get_reg(instr.field1) + extd_imm;
+  memory_.store<Word>(addr    , cpu_->get_reg(instr.field2));
+  memory_.store<Word>(addr + 4, cpu_->get_reg(field3));
 
   INCR_PC;
   if (next == end) {
@@ -346,10 +326,10 @@ void ThrdExec::execute_bne(Instr instr, const Instr* next, const Instr* end) {
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
 
-  bool cond = cpu->get_reg(instr.field1) != cpu->get_reg(instr.field2);
+  bool cond = cpu_->get_reg(instr.field1) != cpu_->get_reg(instr.field2);
 
-  Word pc_prev = cpu->get_pc();
-  cpu->set_pc(cond ? pc_prev + sizeof(Word) + target
+  Word pc_prev = cpu_->get_pc();
+  cpu_->set_pc(cond ? pc_prev + sizeof(Word) + target
                    : pc_prev + sizeof(Word));
   if (next == end) {
     return;
@@ -362,10 +342,10 @@ void ThrdExec::execute_beq(Instr instr, const Instr* next, const Instr* end) {
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
   Word          target      = extd_offset << 2;
 
-  bool cond = cpu->get_reg(instr.field1) == cpu->get_reg(instr.field2);
+  bool cond = cpu_->get_reg(instr.field1) == cpu_->get_reg(instr.field2);
 
-  Word pc_prev = cpu->get_pc();
-  cpu->set_pc(cond ? pc_prev + sizeof(Word) + target
+  Word pc_prev = cpu_->get_pc();
+  cpu_->set_pc(cond ? pc_prev + sizeof(Word) + target
                    : pc_prev + sizeof(Word));
   if (next == end) {
     return;
@@ -379,7 +359,7 @@ void ThrdExec::execute_selc(Instr instr, const Instr* next, const Instr* end) {
   bool     cond = rs1 > rs2;
 
   Register result = cond ? rs1 : rs2;
-  cpu->set_reg(instr.field1, result);
+  cpu_->set_reg(instr.field1, result);
 
   INCR_PC;
   if (next == end) {
@@ -394,7 +374,7 @@ void ThrdExec::execute_sti(Instr instr, const Instr* next, const Instr* end) {
 
   std::size_t addr = reg(instr.field1) + extd_offset;
   memory_.store(addr, reg(instr.field2));
-  cpu->set_reg(instr.field1, addr);
+  cpu_->set_reg(instr.field1, addr);
 
   INCR_PC;
   if (next == end) {
@@ -405,7 +385,7 @@ void ThrdExec::execute_sti(Instr instr, const Instr* next, const Instr* end) {
 
 void ThrdExec::execute_j(Instr instr, const Instr* next, const Instr* end) {
   Register current_pc = pc();
-  cpu->set_pc((current_pc & 0xF0000000) | (instr.field3 << 2));
+  cpu_->set_pc((current_pc & 0xF0000000) | (instr.field3 << 2));
   if (next == end) {
     return;
   }
@@ -413,8 +393,8 @@ void ThrdExec::execute_j(Instr instr, const Instr* next, const Instr* end) {
 }
 
 void ThrdExec::execute_ssat(Instr instr, const Instr* next, const Instr* end) {
-  Register ssatred = sgn_sat(cpu->get_reg(instr.field1), instr.field3);
-  cpu->set_reg(instr.field1, ssatred);
+  Register ssatred = sgn_sat(cpu_->get_reg(instr.field1), instr.field3);
+  cpu_->set_reg(instr.field1, ssatred);
 
   INCR_PC;
   if (next == end) {
@@ -427,9 +407,9 @@ void ThrdExec::execute_ld(Instr instr, const Instr* next, const Instr* end) {
   std::uint32_t bit_width   = FIELD3_WIDTH(instr.instr);
   SignedWord    extd_offset = sgn_extend  (instr.field3, bit_width);
 
-  std::size_t addr = cpu->get_reg(instr.field1) + extd_offset;
+  std::size_t addr = cpu_->get_reg(instr.field1) + extd_offset;
   Word        val  = memory_.load<Word>(addr);
-  cpu->set_reg(instr.field2, val);
+  cpu_->set_reg(instr.field2, val);
 
   INCR_PC;
   if (next == end) {
@@ -440,7 +420,7 @@ void ThrdExec::execute_ld(Instr instr, const Instr* next, const Instr* end) {
 
 void ThrdExec::execute_sbit(Instr instr, const Instr* next, const Instr* end) {
   Register sbit = 1 << instr.field3;
-  cpu->set_reg(instr.field1, sbit);
+  cpu_->set_reg(instr.field1, sbit);
 
   INCR_PC;
   if (next == end) {
@@ -450,8 +430,8 @@ void ThrdExec::execute_sbit(Instr instr, const Instr* next, const Instr* end) {
 }
 
 void ThrdExec::execute_add(Instr instr, const Instr* next, const Instr* end) {
-  Register sum = cpu->get_reg(instr.field2) + cpu->get_reg(instr.field3);
-  cpu->set_reg(instr.field1, sum);
+  Register sum = cpu_->get_reg(instr.field2) + cpu_->get_reg(instr.field3);
+  cpu_->set_reg(instr.field1, sum);
 
   INCR_PC;
   if (next == end) {
@@ -464,8 +444,8 @@ void ThrdExec::execute_add(Instr instr, const Instr* next, const Instr* end) {
 void ThrdExec::execute_addi(Instr instr, const Instr* next, const Instr* end) {
   const std::uint32_t bit_width = FIELD3_WIDTH(instr.instr);
   const SignedWord immediate = sgn_extend(instr.field3, bit_width);
-  Register sum = cpu->get_reg(instr.field1) + immediate;
-  cpu->set_reg(instr.field2, sum);
+  Register sum = cpu_->get_reg(instr.field1) + immediate;
+  cpu_->set_reg(instr.field2, sum);
 
   INCR_PC;
   if (next == end) {
@@ -475,18 +455,18 @@ void ThrdExec::execute_addi(Instr instr, const Instr* next, const Instr* end) {
   THRD_MUSTTAIL return (this->*handlers[next->instr])(*next, next + 1, end);
 }
 
-void Cpu::reset() {
-  *cpu = CoreState{};
+void Executor::reset() {
+  *cpu_ = CoreState{};
   memory_ = Memory{};
   program_bytes_ = 0;
 }
 
-void Cpu::load_instrs(std::vector<Word> &instrs) {
+void Executor::load_instrs(std::vector<Word> &instrs) {
   memory_.load_instrs(0, instrs);
   program_bytes_ = instrs.size() * sizeof(Word);
 }
 
-Word Cpu::fetch_instr(size_t address) {
+Word Executor::fetch_instr(size_t address) {
   if (address % sizeof(Word) != 0 || address > program_bytes_
       || sizeof(Word) > program_bytes_ - address) {
     throw std::out_of_range("cpu: instruction address is out of range");
@@ -494,7 +474,7 @@ Word Cpu::fetch_instr(size_t address) {
   return memory_.load<Word>(address);
 }
 
-Instr Cpu::decoder(Word instr_code) {
+Instr Executor::decoder(Word instr_code) {
   Instr instr{};
   GET_OPCODE(instr_code, instr);
 
@@ -599,7 +579,7 @@ void BtCdExec::execute_next_block() {
 }
 
 void BtCdExec::reset() {
-  Cpu::reset();
+  Executor::reset();
   cache_.clear();
 }
 
@@ -611,9 +591,9 @@ void ThrdExec::execute_next_block() {
     found = cache_.emplace(start, decode_next_block()).first;
   }
 
-  const DecodedBlock& block = found->second;
-  const Instr*        first = block.data();
-  const Instr*        end   = first + block.size();
+  const BasicBlock& block = found->second;
+  const Instr*      first = block.data();
+  const Instr*      end   = first + block.size();
 
   (this->*handlers[first->instr])(*first, first + 1, end);
 }
