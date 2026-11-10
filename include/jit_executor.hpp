@@ -20,7 +20,7 @@ private:
 
   struct BasicBlockTemp {
     BasicBlock    instructions;
-    std::uint32_t exec_cnt;
+    std::uint32_t exec_cnt {0};
   };
 
   enum BlckExitCode : std::uint32_t{
@@ -50,7 +50,8 @@ private:
   JitFunc translate(const BasicBlock &block);
   void    interpret(const BasicBlock &block);
 
-  void translate_instr(const Instr &instr, const JitData &data);
+  void execute_translated(JitFunc func);
+  void translate_instr   (const Instr &instr, const JitData &data);
 
   void translate_clz (const Instr &instr, const JitData &data);
   void translate_li  (const Instr &instr, const JitData &data);

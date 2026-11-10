@@ -4,14 +4,13 @@
 
 #define INCR_PTR data.cc.add  (data.pc_val, sizeof(Word))
 
-
 void JitExec::execute_next_block() {
   Register start_pc = pc();
 
   auto bt_found = bt_cache_.find(start_pc);
 
   if (bt_found != bt_cache_.end()) {
-    bt_found->second(cpu_, guest_ptr(0, kMemorySize));
+    execute_translated(bt_found->second);
     return;
   }
 
@@ -33,11 +32,27 @@ void JitExec::execute_next_block() {
     JitFunc func = translate(entry.instructions);
 
     bt_cache_.emplace(start_pc, func);
-    func(cpu_, guest_ptr(0, kMemorySize));
+    execute_translated(func);
   } else {
     entry.exec_cnt++;
     interpret(entry.instructions);
   }
+}
+
+void JitExec::execute_translated(JitFunc func) {
+  BlckExitCode result = func(cpu_, guest_ptr(0, kMemorySize));
+  if (result != kSyscall) {
+    return;
+  }
+
+  Syscall sysc{};
+  sysc.num = reg(kSyscNumReg);
+
+  for (std::size_t i = 0; i < kSyscArgNum; ++i) {
+    sysc.args[i] = reg(i);
+  }
+
+  throw sysc;
 }
 
 JitExec::JitFunc JitExec::translate(const BasicBlock &block) {
@@ -48,7 +63,7 @@ JitExec::JitFunc JitExec::translate(const BasicBlock &block) {
   asmjit::x86::Compiler cc(&code);
 
   auto* func = cc.add_func(
-      asmjit::FuncSignature::build<BlckExitCode, CoreState*>());
+      asmjit::FuncSignature::build<BlckExitCode, CoreState*, Byte*>());
 
   JitData data{
     cc,
@@ -331,4 +346,11 @@ void JitExec::translate_addi(const Instr &instr, const JitData &data) {
   data.cc.mov(reg_to_dword_ptr(data.state, instr.field2), data.tmp1);
 
   INCR_PTR;
+}
+
+void JitExec::reset() {
+  bt_cache_.clear();
+  bb_cache_.clear();
+  runtime_.reset(asmjit::ResetPolicy::kHard);
+  BtCdExec::reset();
 }

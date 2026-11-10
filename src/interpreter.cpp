@@ -40,12 +40,14 @@ int Interpreter::load_program(const std::string fname) {
     std::cerr << "interpreter: " << error.what() << '\n';
     return EXIT_FAILURE;
   }
-}void Interpreter::iter() {
+} 
+
+void Interpreter::iter() {
   try {
     cpu_->execute_next_block();
   }
 
-  catch (const Cpu::Syscall &sysc) {
+  catch (const Executor::Syscall &sysc) {
     switch (sysc.num) {
       case kExit : 
         exit_code_  = sysc.args[0];
@@ -72,7 +74,7 @@ int Interpreter::load_program(const std::string fname) {
       case kWriteInt:
         std::cout << sysc.args[0] << std::endl;
         break;
-      default: 
+      default:
         throw std::runtime_error("interpreter: unknown syscall");
     }
   }

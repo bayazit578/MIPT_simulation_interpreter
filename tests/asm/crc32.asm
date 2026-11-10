@@ -3,6 +3,8 @@ li x1, 1
 li x2, 2
 li x3, 31
 li x4, 32
+li x22, 3072
+repeat_crc:
 li x5, 8
 li x7, 512
 li x8, 640
@@ -72,6 +74,9 @@ j expected_high
 addi x20, x20, 61325
 beq x18, x20, 1
 j fail
+addi x22, x22, 65535
+beq x22, x0, 1
+j repeat_crc
 li x7, 93
 sysc 0
 fail:

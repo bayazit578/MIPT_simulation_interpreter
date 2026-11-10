@@ -13,7 +13,8 @@ int main(const int argc, const char *const *argv) {
       cxxopts::value<std::string>()
     )(
       "m, mode",
-      "Execution mode: b (bytecode), t (threaded code). Default value: b",
+      "Execution mode: b (bytecode executor), t (threaded code executor), "
+        "j(jit compilation executor). Default value: b",
       cxxopts::value<char>()->default_value("b")
     )(
       "h, help",
@@ -38,8 +39,15 @@ int main(const int argc, const char *const *argv) {
 
     Interpreter::Mode execution_mode;
     switch (mode) {
-      case 'b': execution_mode = Interpreter::Mode::Bytecode; break;
-      case 't': execution_mode = Interpreter::Mode::Threaded; break;
+      case 'b': 
+        execution_mode = Interpreter::Mode::Bytecode; 
+        break;
+      case 't':
+        execution_mode = Interpreter::Mode::Threaded;
+        break;
+      case 'j':
+        execution_mode = Interpreter::Mode::Jit;
+        break;
       default:
         std::cerr << "Invalid execution mode: " << mode << '\n';
         return EXIT_FAILURE;
